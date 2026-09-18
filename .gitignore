@@ -1,0 +1,69 @@
+# Repository-wide ignores for the Sarjy monorepo (apps/web, apps/sarjy-agent).
+# Each app also has its own .gitignore; those stay authoritative for app-local
+# rules, and the patterns here apply to the whole tree.
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+
+# Logs
+# apps/sarjy-agent/.gitignore intends to cover these but ships upstream typos
+# (`_.log`, `npm-debug.log_`), so the working patterns live here.
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Caches and incremental build state
+# `tsc -b` in apps/web writes .tsbuildinfo under node_modules/.tmp/.
+.cache/
+.tmp/
+*.tmp
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+.turbo/
+.vite/
+.npm/
+
+# Test coverage (vitest is installed in both apps)
+coverage/
+*.lcov
+.nyc_output/
+
+# LiveKit agent session recordings and reports.
+# `node src/main.ts console` writes console-recordings/session-<timestamp>/
+# (audio plus session_report.json) relative to the working directory.
+console-recordings/
+
+# Vercel CLI local state (apps/web deploys there; `npx vercel dev` is documented)
+.vercel/
+
+# Local work logs kept out of version control
+logging/
+
+# Environment files: every variant is secret-bearing except the checked-in
+# templates. Keep this block last so the negation is not re-overridden.
+.env
+.env.*
+*.local
+!.env.example
+
+# OS and editor droppings
+.DS_Store
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
