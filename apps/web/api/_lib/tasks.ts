@@ -4,8 +4,8 @@
  * The team is fixed by server configuration (`LINEAR_TEAM_KEY`); there is no
  * query parameter for it. Read-only: there is no write path here.
  */
-import type { TasksError, TasksResponse } from '../../shared/tasks'
-import { fetchStandupTasks, type LinearErrorCode } from './linear'
+import type { TasksError, TasksResponse } from '../../shared/tasks.js'
+import { fetchStandupTasks, type LinearErrorCode } from './linear.js'
 
 /**
  * How a Linear failure is reported to the caller. The detailed reason stays in

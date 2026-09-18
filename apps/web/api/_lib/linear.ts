@@ -4,7 +4,7 @@
  *
  * @see https://linear.app/developers/graphql
  */
-import { TASK_STATUS_TYPES, type Task, type TaskStatusType } from '../../shared/tasks'
+import { TASK_STATUS_TYPES, type Task, type TaskStatusType } from '../../shared/tasks.js'
 
 /** Linear's GraphQL endpoint. */
 const LINEAR_API_URL = 'https://api.linear.app/graphql'

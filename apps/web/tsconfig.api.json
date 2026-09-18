@@ -6,7 +6,8 @@
     "types": ["node"],
     "skipLibCheck": true,
 
-    /* Bundler mode: Vercel and Vite both resolve extensionless imports. */
+    /* Relative imports need a .js extension: Vercel runs these as native ESM
+       ("type": "module"), which does not resolve extensionless specifiers. */
     "module": "esnext",
     "moduleResolution": "bundler",
     "verbatimModuleSyntax": true,
