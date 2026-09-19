@@ -91,9 +91,7 @@ describe('GET /api/tasks', () => {
     ['unauthorized', 500, 'server_not_configured'],
     ['timeout', 503, 'upstream_unavailable'],
     ['network_error', 503, 'upstream_unavailable'],
-    ['http_error', 502, 'upstream_error'],
-    ['graphql_error', 502, 'upstream_error'],
-    ['invalid_response', 502, 'upstream_error'],
+    ['linear_error', 502, 'upstream_error'],
   ])('maps a %s failure to HTTP %i', async (code, status, error) => {
     fetchStandupTasks.mockResolvedValue({ ok: false, error: code, message: 'detail' })
 

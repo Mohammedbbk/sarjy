@@ -1,6 +1,3 @@
-# Repository-wide ignores for the Sarjy monorepo (apps/web, apps/sarjy-agent).
-# Each app also has its own .gitignore; those stay authoritative for app-local
-# rules, and the patterns here apply to the whole tree.
 
 # Dependencies
 node_modules/
@@ -49,6 +46,8 @@ console-recordings/
 
 # Local work logs kept out of version control
 logging/
+
+docs/
 
 # Environment files: every variant is secret-bearing except the checked-in
 # templates. Keep this block last so the negation is not re-overridden.

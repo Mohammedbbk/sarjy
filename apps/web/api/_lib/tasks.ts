@@ -41,15 +41,16 @@ const FAILURES: Record<LinearErrorCode, { status: number; body: TasksError }> = 
     status: 503,
     body: { error: 'upstream_unavailable', message: 'Could not reach Linear.' },
   },
-  http_error: {
+  linear_error: {
     status: 502,
     body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
   },
-  graphql_error: {
+  // Only updateTask produces these; listed so every code has an answer.
+  task_not_found: {
     status: 502,
-    body: { error: 'upstream_error', message: 'Linear rejected the task query.' },
+    body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
   },
-  invalid_response: {
+  unknown_status: {
     status: 502,
     body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
   },

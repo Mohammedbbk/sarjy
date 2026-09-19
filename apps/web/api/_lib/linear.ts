@@ -1,64 +1,138 @@
 /**
- * Read-only Linear lookup. Server-only: the only module that reads
- * `LINEAR_API_KEY` and `LINEAR_TEAM_KEY`. Nothing in `src/` may import it.
+ * Everything the app does with Linear, always for the one team in
+ * `LINEAR_TEAM_KEY`:
+ *
+ *   fetchStandupTasks  the team's open issues (ticket rail, agent's get_tasks)
+ *   updateTask         move an issue and/or comment on it (agent's update_task)
+ *
+ * Both follow the same pattern: call `linear()`, which throws a `LinearError`
+ * on any failure, and turn that error into `{ ok: false }` once, at the end.
+ * Neither exported function throws.
+ *
+ * Server-only: the only module that reads `LINEAR_API_KEY`. Nothing in `src/`
+ * may import it.
  *
  * @see https://linear.app/developers/graphql
  */
 import { TASK_STATUS_TYPES, type Task, type TaskStatusType } from '../../shared/tasks.js'
 
-/** Linear's GraphQL endpoint. */
 const LINEAR_API_URL = 'https://api.linear.app/graphql'
-
-/** Hard ceiling on how many issues one lookup returns. */
-const TASK_LIMIT = 25
-
-/** Total budget for a lookup, shared across both requests. */
 const TIMEOUT_MS = 6000
 
-/**
- * Workflow state types that mean "not live work any more".
- * Linear spells it `canceled`, with one L.
- */
+const TASK_LIMIT = 25
+
 const CLOSED_STATE_TYPES = ['completed', 'canceled']
 
-/** How many team keys to name back when `LINEAR_TEAM_KEY` doesn't match one. */
-const MAX_KEYS_IN_ERROR = 20
-
-/** Why a lookup failed. Distinguishes misconfiguration from a broken call. */
 export type LinearErrorCode =
-  | 'not_configured'
-  | 'team_not_found'
-  | 'unauthorized'
+  | 'not_configured' // LINEAR_API_KEY or LINEAR_TEAM_KEY missing
+  | 'team_not_found' // LINEAR_TEAM_KEY isn't a team in this workspace
+  | 'unauthorized' // Linear rejected LINEAR_API_KEY
   | 'timeout'
-  | 'http_error'
-  | 'graphql_error'
-  | 'invalid_response'
   | 'network_error'
+  | 'linear_error' // Linear answered, but with an error
+  | 'task_not_found' // updateTask: no such issue on the team
+  | 'unknown_status' // updateTask: no such workflow state on the team
+
+export type LinearFailure = { ok: false; error: LinearErrorCode; message: string }
 
 export type LinearTasksResult =
-  | {
-      ok: true
-      /** The team's real key as Linear spells it, not the configured casing. */
-      teamKey: string
-      teamName: string
-      /** Up to `TASK_LIMIT` issues. Empty is a valid, successful answer. */
-      tasks: Task[]
-      /** True when the team has further open issues beyond the ones returned. */
-      hasMore: boolean
-    }
-  | { ok: false; error: LinearErrorCode; message: string }
+  | { ok: true; teamKey: string; teamName: string; tasks: Task[]; hasMore: boolean }
+  | LinearFailure
 
-type GraphQLResponse<T> = {
-  data?: T | null
-  errors?: { message?: string }[] | null
-}
+export type TaskUpdate = { identifier: string; status?: string; comment?: string }
 
-type TeamsData = {
-  teams: {
-    nodes: { id: string; key: string; name: string }[]
-    pageInfo: { hasNextPage: boolean }
+export type LinearUpdateResult = { ok: true; identifier: string; status: string } | LinearFailure
+
+class LinearError extends Error {
+  readonly code: LinearErrorCode
+
+  constructor(code: LinearErrorCode, message: string) {
+    super(message)
+    this.code = code
   }
 }
+
+/** Turn a thrown `LinearError` into a result. Anything else is a bug: rethrow. */
+function toFailure(error: unknown): LinearFailure {
+  if (error instanceof LinearError) return { ok: false, error: error.code, message: error.message }
+  throw error
+}
+
+function readConfig(env: Record<string, string | undefined>) {
+  const apiKey = env.LINEAR_API_KEY?.trim()
+  const teamKey = env.LINEAR_TEAM_KEY?.trim()
+  if (!apiKey || !teamKey) {
+    throw new LinearError(
+      'not_configured',
+      'LINEAR_API_KEY and LINEAR_TEAM_KEY must both be set on the server.',
+    )
+  }
+  return { apiKey, teamKey }
+}
+
+/** Run one GraphQL request and return its `data`, or throw a `LinearError`. */
+async function linear<T>(
+  apiKey: string,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
+  let response: Response
+  try {
+    response = await fetch(LINEAR_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: apiKey },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new LinearError('timeout', `Linear did not respond within ${TIMEOUT_MS}ms.`)
+    }
+    throw new LinearError('network_error', 'Could not reach Linear.')
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new LinearError('unauthorized', 'Linear rejected the API key.')
+  }
+
+  const body = (await response.json().catch(() => null)) as {
+    data?: T
+    errors?: { message: string }[]
+  } | null
+  const errors = body?.errors?.map((e) => e.message).join('; ')
+  if (errors) {
+    const code = /authenticat/i.test(errors) ? 'unauthorized' : 'linear_error'
+    throw new LinearError(code, `Linear returned an error: ${errors}`)
+  }
+  if (!response.ok || !body?.data) {
+    throw new LinearError('linear_error', `Linear returned HTTP ${response.status}.`)
+  }
+  return body.data
+}
+
+// ---------------------------------------------------------------------------
+// Reading: the team's open issues
+// ---------------------------------------------------------------------------
+
+/** One request: the team itself (to check the key) and its open issues. */
+const OPEN_ISSUES_QUERY = `
+  query SarjyOpenIssues($teamKey: String!, $first: Int!, $closedTypes: [String!]!) {
+    teams(filter: { key: { eqIgnoreCase: $teamKey } }) {
+      nodes { key name }
+    }
+    issues(
+      first: $first
+      orderBy: updatedAt
+      filter: {
+        team: { key: { eqIgnoreCase: $teamKey } }
+        state: { type: { nin: $closedTypes } }
+      }
+    ) {
+      nodes { id identifier title priority priorityLabel url state { name type } }
+      pageInfo { hasNextPage }
+    }
+  }
+`
 
 type IssueNode = {
   id: string
@@ -67,266 +141,155 @@ type IssueNode = {
   priority: number
   priorityLabel: string
   url: string
-  state: { name: string; type: string } | null
+  state: { name: string; type: string }
 }
 
-type IssuesData = {
-  issues: {
-    nodes: IssueNode[]
-    pageInfo: { hasNextPage: boolean }
-  }
+type OpenIssuesData = {
+  teams: { nodes: { key: string; name: string }[] }
+  issues: { nodes: IssueNode[]; pageInfo: { hasNextPage: boolean } }
 }
 
-const TEAMS_QUERY = `
-  query SarjyTeams($first: Int!) {
-    teams(first: $first, includeArchived: false) {
-      nodes { id key name }
-      pageInfo { hasNextPage }
-    }
-  }
-`
-
-const ISSUES_QUERY = `
-  query SarjyOpenIssues($teamId: ID!, $first: Int!, $closedTypes: [String!]!) {
-    issues(
-      first: $first
-      includeArchived: false
-      orderBy: updatedAt
-      filter: {
-        team: { id: { eq: $teamId } }
-        state: { type: { nin: $closedTypes } }
-      }
-    ) {
-      nodes {
-        id
-        identifier
-        title
-        priority
-        priorityLabel
-        url
-        state { name type }
-      }
-      pageInfo { hasNextPage }
-    }
-  }
-`
-
-/** Failure shape used internally while a request is still being unwrapped. */
-type RequestFailure = { ok: false; error: LinearErrorCode; message: string }
-
-function fail(error: LinearErrorCode, message: string): RequestFailure {
-  return { ok: false, error, message }
-}
-
-/**
- * Issue one GraphQL request and unwrap it.
- *
- * `errors` is checked on every response: Linear returns query-level errors
- * under HTTP 200.
- */
-async function request<T>(
-  apiKey: string,
-  query: string,
-  variables: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<{ ok: true; data: T } | RequestFailure> {
-  let response: Response
-  try {
-    response = await fetch(LINEAR_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: apiKey,
-      },
-      body: JSON.stringify({ query, variables }),
-      signal,
-    })
-  } catch (error) {
-    if (signal.aborted) {
-      return fail('timeout', `Linear did not respond within ${TIMEOUT_MS}ms.`)
-    }
-    const detail = error instanceof Error ? error.message : 'unknown error'
-    return fail('network_error', `Could not reach Linear: ${detail}.`)
-  }
-
-  if (response.status === 401 || response.status === 403) {
-    return fail(
-      'unauthorized',
-      `Linear rejected the API key (HTTP ${response.status}). ` +
-        'It may be revoked, or lack access to this workspace.',
-    )
-  }
-
-  let body: GraphQLResponse<T>
-  try {
-    body = (await response.json()) as GraphQLResponse<T>
-  } catch {
-    if (!response.ok) {
-      return fail('http_error', `Linear returned HTTP ${response.status}.`)
-    }
-    return fail('invalid_response', 'Linear returned a body that was not JSON.')
-  }
-
-  if (body.errors?.length) {
-    const detail = body.errors
-      .map((e) => e.message)
-      .filter((m): m is string => Boolean(m))
-      .join('; ')
-    if (/authenticat|unauthoriz|invalid api key/i.test(detail)) {
-      return fail('unauthorized', `Linear rejected the API key: ${detail}`)
-    }
-    return fail('graphql_error', `Linear returned an error: ${detail || 'no detail given'}.`)
-  }
-
-  if (!response.ok) {
-    return fail('http_error', `Linear returned HTTP ${response.status}.`)
-  }
-
-  if (!body.data) {
-    return fail('invalid_response', 'Linear returned a response with no data.')
-  }
-
-  return { ok: true, data: body.data }
-}
-
-/**
- * Explain a team-key mismatch without guessing at a replacement.
- *
- * Names the workspace's teams, so it is for the server log only.
- */
-function teamNotFoundMessage(
-  configured: string,
-  teams: { key: string; name: string }[],
-  truncated: boolean,
-): string {
-  const known = teams.slice(0, MAX_KEYS_IN_ERROR).map((t) => `${t.key} (${t.name})`)
-  const suffix = truncated || teams.length > MAX_KEYS_IN_ERROR ? ', and others not listed here' : ''
-
-  if (known.length === 0) {
-    return (
-      `LINEAR_TEAM_KEY is set to "${configured}", but this API key can't see any teams. ` +
-      `Check that the key belongs to the right workspace.`
-    )
-  }
-
-  return (
-    `LINEAR_TEAM_KEY is set to "${configured}", which is not a team key in this workspace. ` +
-    `A team key is the short prefix on ticket identifiers, like the "ENG" in ENG-482 — ` +
-    `not the team's display name and not the workspace slug from the Linear URL. ` +
-    `Accessible team keys: ${known.join(', ')}${suffix}. ` +
-    `Update LINEAR_TEAM_KEY in the web app's environment to one of those.`
-  )
-}
-
-/**
- * Narrow Linear's free-form state type to the categories the UI styles.
- * Anything unrecognised falls back to `unstarted`; `status` keeps the real name.
- */
-function toStatusType(type: string): TaskStatusType {
-  return (TASK_STATUS_TYPES as readonly string[]).includes(type)
-    ? (type as TaskStatusType)
+function toTask(node: IssueNode): Task {
+  const statusType = (TASK_STATUS_TYPES as readonly string[]).includes(node.state.type)
+    ? (node.state.type as TaskStatusType)
     : 'unstarted'
-}
-
-function mapTask(node: IssueNode): Task | null {
-  if (!node.id || !node.identifier || !node.state) return null
   return {
     id: node.id,
     identifier: node.identifier,
     title: node.title,
     status: node.state.name,
-    statusType: toStatusType(node.state.type),
+    statusType,
     priority: node.priority,
     priorityLabel: node.priorityLabel,
     url: node.url,
   }
 }
 
-/**
- * Look up the configured team's open issues.
- *
- * The team comes from server configuration only; there is no parameter for it.
- * Never throws — every failure path returns `{ ok: false }` with a code.
- */
+/** The configured team's most recently updated open issues. */
 export async function fetchStandupTasks(
   env: Record<string, string | undefined> = process.env,
 ): Promise<LinearTasksResult> {
-  const apiKey = env.LINEAR_API_KEY?.trim()
-  const configuredKey = env.LINEAR_TEAM_KEY?.trim()
-
-  const missing = [
-    apiKey ? null : 'LINEAR_API_KEY',
-    configuredKey ? null : 'LINEAR_TEAM_KEY',
-  ].filter((name): name is string => name !== null)
-
-  if (missing.length > 0 || !apiKey || !configuredKey) {
-    return {
-      ok: false,
-      error: 'not_configured',
-      message:
-        `Linear is not configured: ${missing.join(' and ')} ` +
-        `${missing.length > 1 ? 'are' : 'is'} missing from the server environment.`,
-    }
-  }
-
-  const controller = new AbortController()
-  const deadline = setTimeout(() => controller.abort(), TIMEOUT_MS)
-
   try {
-    const teamsResult = await request<TeamsData>(
-      apiKey,
-      TEAMS_QUERY,
-      { first: 250 },
-      controller.signal,
-    )
-    if (!teamsResult.ok) return teamsResult
+    const { apiKey, teamKey } = readConfig(env)
+    const data = await linear<OpenIssuesData>(apiKey, OPEN_ISSUES_QUERY, {
+      teamKey,
+      first: TASK_LIMIT,
+      closedTypes: CLOSED_STATE_TYPES,
+    })
 
-    const teams = teamsResult.data.teams?.nodes ?? []
-    const wanted = configuredKey.toLowerCase()
-    const team = teams.find((t) => t.key?.toLowerCase() === wanted)
-
+    const team = data.teams.nodes[0]
     if (!team) {
-      return {
-        ok: false,
-        error: 'team_not_found',
-        message: teamNotFoundMessage(
-          configuredKey,
-          teams,
-          teamsResult.data.teams?.pageInfo?.hasNextPage ?? false,
-        ),
-      }
-    }
-
-    const issuesResult = await request<IssuesData>(
-      apiKey,
-      ISSUES_QUERY,
-      { teamId: team.id, first: TASK_LIMIT, closedTypes: CLOSED_STATE_TYPES },
-      controller.signal,
-    )
-    if (!issuesResult.ok) return issuesResult
-
-    const nodes = issuesResult.data.issues?.nodes ?? []
-    const tasks: Task[] = []
-    for (const node of nodes) {
-      const task = mapTask(node)
-      if (!task) {
-        return {
-          ok: false,
-          error: 'invalid_response',
-          message: 'Linear returned an issue without an identifier or workflow state.',
-        }
-      }
-      tasks.push(task)
+      throw new LinearError(
+        'team_not_found',
+        `LINEAR_TEAM_KEY "${teamKey}" is not a team in this workspace. ` +
+          'Use the prefix on ticket identifiers, like ENG in ENG-482.',
+      )
     }
 
     return {
       ok: true,
       teamKey: team.key,
       teamName: team.name,
-      tasks,
-      hasMore: issuesResult.data.issues?.pageInfo?.hasNextPage ?? false,
+      tasks: data.issues.nodes.map(toTask),
+      hasMore: data.issues.pageInfo.hasNextPage,
     }
-  } finally {
-    clearTimeout(deadline)
+  } catch (error) {
+    return toFailure(error)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Writing: move an issue and/or comment on it
+// ---------------------------------------------------------------------------
+
+/** Finds SAR-12 as "issue number 12 on team SAR", so other teams never match. */
+const FIND_ISSUE_QUERY = `
+  query SarjyFindIssue($teamKey: String!, $number: Float!) {
+    issues(first: 1, filter: {
+      team: { key: { eqIgnoreCase: $teamKey } }
+      number: { eq: $number }
+    }) {
+      nodes {
+        id
+        identifier
+        state { name }
+        team { states { nodes { id name } } }
+      }
+    }
+  }
+`
+
+const SET_STATE_MUTATION = `
+  mutation SarjySetState($id: String!, $stateId: String!) {
+    issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+  }
+`
+
+const ADD_COMMENT_MUTATION = `
+  mutation SarjyComment($issueId: String!, $body: String!) {
+    commentCreate(input: { issueId: $issueId, body: $body }) { success }
+  }
+`
+
+type FoundIssue = {
+  id: string
+  identifier: string
+  state: { name: string }
+  team: { states: { nodes: { id: string; name: string }[] } }
+}
+
+async function findIssue(apiKey: string, teamKey: string, identifier: string) {
+  const [prefix, number] = identifier.split('-')
+  const onThisTeam = prefix?.toLowerCase() === teamKey.toLowerCase()
+  const data = onThisTeam
+    ? await linear<{ issues: { nodes: FoundIssue[] } }>(apiKey, FIND_ISSUE_QUERY, {
+        teamKey,
+        number: Number(number),
+      })
+    : null
+
+  const issue = data?.issues.nodes[0]
+  if (!issue) {
+    throw new LinearError('task_not_found', `There is no ticket ${identifier} on this team.`)
+  }
+  return issue
+}
+
+/** Status names match case-insensitively, against this team's own workflow. */
+function findState(issue: FoundIssue, status: string) {
+  const states = issue.team.states.nodes
+  const state = states.find((s) => s.name.toLowerCase() === status.trim().toLowerCase())
+  if (!state) {
+    throw new LinearError(
+      'unknown_status',
+      `"${status}" is not a status. Valid statuses: ${states.map((s) => s.name).join(', ')}.`,
+    )
+  }
+  return state
+}
+
+export async function updateTask(
+  { identifier, status, comment }: TaskUpdate,
+  env: Record<string, string | undefined> = process.env,
+): Promise<LinearUpdateResult> {
+  try {
+    const { apiKey, teamKey } = readConfig(env)
+    const issue = await findIssue(apiKey, teamKey, identifier)
+    let newStatus = issue.state.name
+
+    if (status) {
+      const state = findState(issue, status)
+      await linear(apiKey, SET_STATE_MUTATION, { id: issue.id, stateId: state.id })
+      newStatus = state.name
+    }
+
+    if (comment) {
+      const body = `${comment}\n\n— via Sarjy`
+      await linear(apiKey, ADD_COMMENT_MUTATION, { issueId: issue.id, body })
+    }
+
+    return { ok: true, identifier: issue.identifier, status: newStatus }
+  } catch (error) {
+    return toFailure(error)
   }
 }
