@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@linear/sdk": "^95.1.0",
     "@livekit/components-react": "^2.9.24",
     "@livekit/protocol": "^1.51.0",
     "@supabase/supabase-js": "^2.116.0",

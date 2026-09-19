@@ -33,10 +33,6 @@ const FAILURES: Record<LinearErrorCode, { status: number; body: TasksError }> = 
       message: 'The server’s Linear credentials were rejected.',
     },
   },
-  timeout: {
-    status: 503,
-    body: { error: 'upstream_unavailable', message: 'Linear took too long to respond.' },
-  },
   network_error: {
     status: 503,
     body: { error: 'upstream_unavailable', message: 'Could not reach Linear.' },

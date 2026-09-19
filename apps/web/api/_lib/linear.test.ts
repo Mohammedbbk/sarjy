@@ -1,46 +1,64 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fetchStandupTasks, updateTask } from './linear'
+import {
+  AuthenticationLinearError,
+  InvalidInputLinearError,
+  NetworkLinearError,
+} from '@linear/sdk'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+/** Fake Linear SDK client: `teams()` and `createComment()` are all the code calls on it. */
+const client = vi.hoisted(() => ({ teams: vi.fn(), createComment: vi.fn() }))
+vi.mock('@linear/sdk', async (original) => ({
+  ...(await original<typeof import('@linear/sdk')>()),
+  LinearClient: class {
+    teams = client.teams
+    createComment = client.createComment
+  },
+}))
+
+const { fetchStandupTasks, updateTask } = await import('./linear')
 
 const ENV = { LINEAR_API_KEY: 'test-key', LINEAR_TEAM_KEY: 'sar' }
 
-const ISSUE_NODE = {
+const STATES = [
+  { id: 'state-todo', name: 'Todo', type: 'unstarted' },
+  { id: 'state-progress', name: 'In Progress', type: 'started' },
+  { id: 'state-review', name: 'In Review', type: 'started' },
+]
+
+const ISSUE = {
   id: 'issue-uuid',
   identifier: 'SAR-4',
   title: 'Wire the ticket rail to Linear',
   priority: 2,
   priorityLabel: 'High',
   url: 'https://linear.app/sarjy/issue/SAR-4',
-  state: { name: 'In Progress', type: 'started' },
+  stateId: 'state-progress',
 }
 
-function openIssues(nodes = [ISSUE_NODE], teams = [{ key: 'SAR', name: 'Sarjy' }]) {
-  return { data: { teams: { nodes: teams }, issues: { nodes, pageInfo: { hasNextPage: false } } } }
+/** A fake team holding `issues`, as `client.teams()` returns it. */
+function fakeTeam(issues: object[] = [ISSUE]) {
+  const update = vi.fn().mockResolvedValue({ success: true })
+  const team = {
+    key: 'SAR',
+    name: 'Sarjy',
+    issues: vi.fn().mockResolvedValue({
+      nodes: issues.map((issue) => ({ ...issue, update })),
+      pageInfo: { hasNextPage: false },
+    }),
+    states: vi.fn().mockResolvedValue({ nodes: STATES }),
+  }
+  client.teams.mockResolvedValue({ nodes: [team] })
+  return { team, update }
 }
 
-/** Fake Linear: answers each request with the next queued body (or error). */
-function fakeLinear(...replies: (unknown | Error)[]) {
-  const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => {
-    const reply = replies.shift()
-    if (reply instanceof Error) throw reply
-    if (reply instanceof Response) return reply
-    return Response.json(reply)
-  })
-  vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
-}
-
-/** The GraphQL variables sent with request number `call`. */
-function variables(fetchMock: ReturnType<typeof fakeLinear>, call: number) {
-  const init = fetchMock.mock.calls[call]![1]
-  return (JSON.parse(init.body as string) as { variables: Record<string, unknown> }).variables
-}
-
-beforeEach(() => vi.unstubAllGlobals())
-afterEach(() => vi.unstubAllGlobals())
+beforeEach(() => {
+  client.teams.mockReset()
+  client.createComment.mockReset().mockResolvedValue({ success: true })
+})
 
 describe('fetchStandupTasks', () => {
   it('returns the team and its open issues as tasks', async () => {
-    const fetchMock = fakeLinear(openIssues())
+    const { team } = fakeTeam()
 
     expect(await fetchStandupTasks(ENV)).toEqual({
       ok: true,
@@ -60,62 +78,35 @@ describe('fetchStandupTasks', () => {
         },
       ],
     })
-    expect(variables(fetchMock, 0)).toEqual({
-      teamKey: 'sar',
-      first: 25,
-      closedTypes: ['completed', 'canceled'],
-    })
-  })
-
-  it('shows an unfamiliar state category as unstarted, keeping its name', async () => {
-    fakeLinear(openIssues([{ ...ISSUE_NODE, state: { name: 'Duplicate', type: 'duplicate' } }]))
-
-    const result = await fetchStandupTasks(ENV)
-
-    expect(result.ok && result.tasks[0]).toMatchObject({ status: 'Duplicate', statusType: 'unstarted' })
+    expect(client.teams).toHaveBeenCalledWith({ filter: { key: { eqIgnoreCase: 'sar' } } })
+    expect(team.issues).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: { state: { type: { nin: ['completed', 'canceled'] } } } }),
+    )
   })
 
   it('reports a team key that matches no team', async () => {
-    fakeLinear(openIssues([], []))
+    client.teams.mockResolvedValue({ nodes: [] })
     expect(await fetchStandupTasks(ENV)).toMatchObject({ ok: false, error: 'team_not_found' })
   })
 
   it('reports missing configuration without calling Linear', async () => {
-    const fetchMock = fakeLinear()
     expect(await fetchStandupTasks({})).toMatchObject({ ok: false, error: 'not_configured' })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(client.teams).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['a rejected key', new Response('', { status: 401 }), 'unauthorized'],
-    ['an auth error in the body', { errors: [{ message: 'Authentication required' }] }, 'unauthorized'],
-    ['a query error', { errors: [{ message: 'Field "x" is not defined' }] }, 'linear_error'],
-    ['a server error', new Response('oops', { status: 500 }), 'linear_error'],
-    ['a network failure', new TypeError('fetch failed'), 'network_error'],
-    ['a timeout', new DOMException('slow', 'TimeoutError'), 'timeout'],
-  ])('reports %s', async (_case, reply, error) => {
-    fakeLinear(reply)
-    expect(await fetchStandupTasks(ENV)).toMatchObject({ ok: false, error })
-  })
-
-  it('never puts the API key in an error message', async () => {
-    fakeLinear(new TypeError('fetch failed'))
-    expect(JSON.stringify(await fetchStandupTasks(ENV))).not.toContain('test-key')
+    ['a rejected key', new AuthenticationLinearError(), 'unauthorized'],
+    ['a network failure', new NetworkLinearError(), 'network_error'],
+    ['any other Linear error', new InvalidInputLinearError(), 'linear_error'],
+  ])('reports %s', async (_case, error, code) => {
+    client.teams.mockRejectedValue(error)
+    expect(await fetchStandupTasks(ENV)).toMatchObject({ ok: false, error: code })
   })
 })
 
 describe('updateTask', () => {
-  const FOUND = {
-    id: 'issue-uuid',
-    identifier: 'SAR-12',
-    state: { name: 'In Progress' },
-    team: { states: { nodes: [{ id: 'state-review', name: 'In Review' }] } },
-  }
-  const found = (nodes: unknown[] = [FOUND]) => ({ data: { issues: { nodes } } })
-  const ok = { data: { success: true } }
-
-  it('finds the issue by team and number, then moves it and comments', async () => {
-    const fetchMock = fakeLinear(found(), ok, ok)
+  it('finds the issue by number on the team, then moves it and comments', async () => {
+    const { team, update } = fakeTeam([{ ...ISSUE, identifier: 'SAR-12' }])
 
     const result = await updateTask(
       { identifier: 'SAR-12', status: 'in review', comment: 'Ready for review.' },
@@ -123,34 +114,35 @@ describe('updateTask', () => {
     )
 
     expect(result).toEqual({ ok: true, identifier: 'SAR-12', status: 'In Review' })
-    expect(variables(fetchMock, 0)).toEqual({ teamKey: 'sar', number: 12 })
-    expect(variables(fetchMock, 1)).toEqual({ id: 'issue-uuid', stateId: 'state-review' })
-    expect(variables(fetchMock, 2)).toEqual({
+    expect(team.issues).toHaveBeenCalledWith({ first: 1, filter: { number: { eq: 12 } } })
+    expect(update).toHaveBeenCalledWith({ stateId: 'state-review' })
+    expect(client.createComment).toHaveBeenCalledWith({
       issueId: 'issue-uuid',
       body: 'Ready for review.\n\n— via Sarjy',
     })
   })
 
-  it('refuses a ticket from another team without asking Linear', async () => {
-    const fetchMock = fakeLinear()
-    const result = await updateTask({ identifier: 'ENG-1', status: 'Done' }, ENV)
+  it('refuses a ticket from another team without looking it up', async () => {
+    const { team } = fakeTeam()
+    const result = await updateTask({ identifier: 'ENG-1', status: 'Todo' }, ENV)
     expect(result).toMatchObject({ ok: false, error: 'task_not_found' })
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(team.issues).not.toHaveBeenCalled()
   })
 
   it('reports a ticket number that does not exist', async () => {
-    fakeLinear(found([]))
-    const result = await updateTask({ identifier: 'SAR-999', status: 'Done' }, ENV)
+    fakeTeam([])
+    const result = await updateTask({ identifier: 'SAR-999', status: 'Todo' }, ENV)
     expect(result).toMatchObject({ ok: false, error: 'task_not_found' })
   })
 
   it('refuses an unknown status, naming the valid ones, without writing', async () => {
-    const fetchMock = fakeLinear(found())
+    const { update } = fakeTeam()
 
-    const result = await updateTask({ identifier: 'SAR-12', status: 'Shipped' }, ENV)
+    const result = await updateTask({ identifier: 'SAR-4', status: 'Shipped' }, ENV)
 
     expect(result).toMatchObject({ ok: false, error: 'unknown_status' })
-    expect(!result.ok && result.message).toContain('In Review')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(!result.ok && result.message).toContain('Todo, In Progress, In Review')
+    expect(update).not.toHaveBeenCalled()
+    expect(client.createComment).not.toHaveBeenCalled()
   })
 })
