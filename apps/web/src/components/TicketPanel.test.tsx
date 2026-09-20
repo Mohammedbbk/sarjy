@@ -148,13 +148,15 @@ describe('TicketPanel', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/tasks')
   })
 
-  it('states how tickets change, under the demo workspace label', async () => {
-    mockFetchSequence(Response.json(tasksResponse()))
+  it('labels each group with how many tickets it holds', async () => {
+    const finished = { ...TASK, id: 'done-1', identifier: 'SAR-1', statusType: 'completed' as const }
+    mockFetchSequence(Response.json(tasksResponse({ done: [finished] })))
 
     mount()
-    await screen.findByText('SAR-4')
+    await screen.findByText('SAR-1')
 
-    expect(screen.getByText('Demo workspace')).toBeTruthy()
-    expect(screen.getByText(/only changes a ticket after you confirm/)).toBeTruthy()
+    expect(screen.getByText(/Recently done · 1/)).toBeTruthy()
+    expect(screen.getByText(/In progress · 1/)).toBeTruthy()
+    expect(screen.getByText(/Up next · 0/)).toBeTruthy()
   })
 })
