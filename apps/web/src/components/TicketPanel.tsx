@@ -9,11 +9,7 @@ const dotFor: Record<TaskStatusType, string> = {
   backlog: 'border-[1.5px] border-dimmer',
 }
 
-type Props = {
-  highlightId?: string
-}
-
-export function TicketPanel({ highlightId }: Props) {
+export function TicketPanel() {
   const { data, error, isPending, isFetching, refetch } = useTasks()
 
   return (
@@ -43,48 +39,35 @@ export function TicketPanel({ highlightId }: Props) {
         ) : data.tasks.length === 0 ? (
           <TicketsEmpty />
         ) : (
-          <TicketList tasks={data.tasks} hasMore={data.hasMore} highlightId={highlightId} />
+          <TicketList tasks={data.tasks} hasMore={data.hasMore} />
         )}
       </div>
     </section>
   )
 }
 
-function TicketList({
-  tasks,
-  hasMore,
-  highlightId,
-}: {
-  tasks: Task[]
-  hasMore: boolean
-  highlightId?: string
-}) {
+function TicketList({ tasks, hasMore }: { tasks: Task[]; hasMore: boolean }) {
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-1">
-        {tasks.map((task) => {
-          const highlighted = task.identifier === highlightId
-          return (
-            <li
-              key={task.id}
-              className={`flex items-center gap-2.5 rounded-lg border px-2.5 py-2.5 ${
-                highlighted ? 'border-accent bg-accent/10' : 'border-transparent'
-              }`}
-            >
-              <span
-                className={`size-2 shrink-0 rounded-full ${dotFor[task.statusType]}`}
-                aria-hidden="true"
-              />
-              <span className="min-w-[58px] shrink-0 font-mono text-xs text-dim">
-                {task.identifier}
-              </span>
-              <span className="flex-1 truncate text-[13.5px]">{task.title}</span>
-              <span className="min-w-[78px] shrink-0 text-right font-mono text-[11px] text-dim">
-                {task.status}
-              </span>
-            </li>
-          )
-        })}
+        {tasks.map((task) => (
+          <li
+            key={task.id}
+            className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2.5"
+          >
+            <span
+              className={`size-2 shrink-0 rounded-full ${dotFor[task.statusType]}`}
+              aria-hidden="true"
+            />
+            <span className="min-w-[58px] shrink-0 font-mono text-xs text-dim">
+              {task.identifier}
+            </span>
+            <span className="flex-1 truncate text-[13.5px]">{task.title}</span>
+            <span className="min-w-[78px] shrink-0 text-right font-mono text-[11px] text-dim">
+              {task.status}
+            </span>
+          </li>
+        ))}
       </ul>
 
       {hasMore && (

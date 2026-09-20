@@ -72,11 +72,3 @@ export function CloseIcon(props: IconProps) {
     </Svg>
   )
 }
-
-export function CheckIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <polyline points="20 6 9 17 4 12" />
-    </Svg>
-  )
-}

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const updateTask = vi.hoisted(() => vi.fn())
 vi.mock('./linear.js', () => ({ updateTask }))
 
-const { handleTaskUpdateRequest } = await import('./task-updates')
+const { POST: handleTaskUpdateRequest } = await import('../task-updates.js')
 
 function post(body: unknown, token = 'test-token') {
   return handleTaskUpdateRequest(

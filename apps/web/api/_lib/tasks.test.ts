@@ -4,7 +4,7 @@ import type { TasksError, TasksResponse } from '../../shared/tasks'
 const fetchStandupTasks = vi.hoisted(() => vi.fn())
 vi.mock('./linear', () => ({ fetchStandupTasks }))
 
-const { handleTasksRequest } = await import('./tasks')
+const { GET: handleTasksRequest } = await import('../tasks.js')
 
 const TASK = {
   id: '9f1c2d3e-0000-4000-8000-aaaaaaaaaaaa',

@@ -1,11 +1,78 @@
 /**
- * GET /api/tasks — the demo team's open Linear tickets.
+ * Stand-up task lookup.
  *
- * Deployed as a Vercel Function (Node.js runtime, Web Handler signature) and
- * served by the same code in `pnpm dev` through the dev-api Vite plugin.
+ * The team is fixed by server configuration (`LINEAR_TEAM_KEY`); there is no
+ * query parameter for it. Read-only: there is no write path here.
  */
-import { handleTasksRequest } from './_lib/tasks.js'
+import type { TasksError, TasksResponse } from '../shared/tasks.js'
+import { json } from './_lib/http.js'
+import { fetchStandupTasks, type LinearErrorCode } from './_lib/linear.js'
 
-export function GET(request: Request): Promise<Response> {
-  return handleTasksRequest(request)
+/**
+ * How a Linear failure is reported to the caller. The detailed reason stays in
+ * the server log; the browser gets a coarse code and a message safe to render.
+ */
+const FAILURES: Record<LinearErrorCode, { status: number; body: TasksError }> = {
+  not_configured: {
+    status: 500,
+    body: {
+      error: 'server_not_configured',
+      message: 'The server is missing its Linear credentials.',
+    },
+  },
+  team_not_found: {
+    status: 500,
+    body: {
+      error: 'server_not_configured',
+      message: 'The server’s Linear team is not configured correctly.',
+    },
+  },
+  unauthorized: {
+    status: 500,
+    body: {
+      error: 'server_not_configured',
+      message: 'The server’s Linear credentials were rejected.',
+    },
+  },
+  network_error: {
+    status: 503,
+    body: { error: 'upstream_unavailable', message: 'Could not reach Linear.' },
+  },
+  linear_error: {
+    status: 502,
+    body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
+  },
+  // Only updateTask produces these; listed so every code has an answer.
+  task_not_found: {
+    status: 502,
+    body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
+  },
+  unknown_status: {
+    status: 502,
+    body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
+  },
+}
+
+export async function GET(request: Request): Promise<Response> {
+  if (request.method !== 'GET') {
+    return json(405, { error: 'invalid_request', message: 'Use GET.' }, { Allow: 'GET' })
+  }
+
+  const result = await fetchStandupTasks()
+
+  if (!result.ok) {
+    console.error(`[api/tasks] ${result.error}: ${result.message}`)
+    const failure = FAILURES[result.error]
+    return json(failure.status, failure.body)
+  }
+
+  const body: TasksResponse = {
+    source: 'linear',
+    teamKey: result.teamKey,
+    count: result.tasks.length,
+    hasMore: result.hasMore,
+    tasks: result.tasks,
+  }
+
+  return json(200, body)
 }

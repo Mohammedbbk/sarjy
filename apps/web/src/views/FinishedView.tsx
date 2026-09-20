@@ -26,12 +26,6 @@ export function FinishedView({ turns, duration, onRestart }: Props) {
         </p>
       </div>
 
-      {/*
-        A written summary and a "tickets updated" receipt used to live here.
-        Both are gone until something real produces them: the agent does not
-        summarise the call, and it cannot change a ticket.
-      */}
-
       <section className="flex flex-col gap-4" aria-labelledby="transcript-heading">
         <h2 id="transcript-heading" className="text-[15px] font-bold">
           Transcript

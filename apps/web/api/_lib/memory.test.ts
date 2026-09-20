@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => ({ getFacts: vi.fn(), saveFact: vi.fn() }))
 vi.mock('./memory-store.js', () => store)
-const { handleMemoryRequest } = await import('./memory.js')
+const { GET: handleMemoryRequest } = await import('../memory.js')
 
 function request(method = 'GET', body?: string, token = 'test-token') {
   return handleMemoryRequest(

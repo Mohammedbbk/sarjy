@@ -11,7 +11,7 @@ the pieces fit together.
 ```sh
 cp .env.example .env.local   # fill in your LiveKit project details
 pnpm install
-pnpm dev                     # frontend + API on http://localhost:5173
+pnpm dev                     # frontend + API on http://localhost:5180
 ```
 
 The agent has to be running too, or Sarjy never picks up:
@@ -24,18 +24,20 @@ pnpm --dir ../sarjy-agent dev
 
 ```
 api/
-  session.ts          POST /api/session — the Vercel Function entry
-  _lib/session.ts     token minting and agent dispatch (the only reader of the API secret)
+  session.ts          POST /api/session — token minting and agent dispatch
+  tasks.ts            GET /api/tasks — open Linear tickets
+  task-updates.ts     POST /api/task-updates — confirmed ticket changes
+  memory.ts           GET/POST /api/memory — shared demo facts
+  _lib/               Linear, Supabase, authentication, and JSON responses
 vite/
   dev-api.ts          runs api/ inside `vite dev`, so dev and production share one handler
 src/
   App.tsx             session lifecycle: useSession + SessionProvider + RoomAudioRenderer
   lib/session.ts      the token source and the error vocabulary shown to the user
-  lib/useStandup.ts   stand-up stage machine, kept separate from LiveKit connection state
+  lib/useStandup.ts   session lifecycle, cancellation, and transcript capture
   lib/transcript.ts   session messages → transcript turns
   views/              idle · live · finished
   components/         presentational pieces
-  mock/standup.ts     DEMO DATA: the Linear ticket list, and nothing else
 ```
 
 ## Scripts
