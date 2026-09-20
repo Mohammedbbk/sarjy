@@ -2,12 +2,13 @@ import type { Task, TasksResponse, TaskStatusType } from '../../shared/tasks'
 import { useTasks, TasksRequestError } from '../lib/tasks'
 import { Button } from './Button'
 
+/** Colour means one thing here: started. Everything else is grey. */
 const dotFor: Record<TaskStatusType, string> = {
-  started: 'bg-amber',
-  triage: 'bg-accent',
+  started: 'bg-accent',
+  triage: 'border-[1.5px] border-muted',
   unstarted: 'border-[1.5px] border-muted',
   backlog: 'border-[1.5px] border-dimmer',
-  completed: 'bg-dimmer',
+  completed: 'bg-dim',
 }
 
 export function TicketPanel() {
@@ -15,21 +16,13 @@ export function TicketPanel() {
 
   return (
     <section className="flex flex-col gap-4.5" aria-labelledby="ticket-panel-heading">
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-baseline justify-between">
-          <h2 id="ticket-panel-heading" className="text-[15px] font-bold">
-            Linear tickets
-          </h2>
-          <span className="font-mono text-xs text-dim">
-            {data ? `${data.openCount}${data.hasMore ? '+' : ''} open` : '—'}
-          </span>
-        </div>
-        <p className="flex flex-wrap items-center gap-2 text-xs leading-relaxed text-dim">
-          <span className="inline-flex shrink-0 items-center rounded-md border border-line bg-raised px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.05em] text-muted uppercase">
-            Demo workspace
-          </span>
-          Live from Linear. Sarjy only changes a ticket after you confirm.
-        </p>
+      <div className="flex items-baseline justify-between">
+        <h2 id="ticket-panel-heading" className="text-[15px] font-semibold">
+          Linear tickets
+        </h2>
+        <span className="font-mono text-xs text-dim">
+          {data ? `${data.openCount}${data.hasMore ? '+' : ''} open` : '—'}
+        </span>
       </div>
 
       <div aria-live="polite" aria-busy={isPending}>
@@ -50,22 +43,25 @@ export function TicketPanel() {
 /** The three groups, in the order a stand-up walks through them. */
 function TicketGroups({ data }: { data: TasksResponse }) {
   const groups = [
-    { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.' },
-    { heading: 'In progress', tasks: data.inProgress, empty: 'Nothing started yet.' },
-    { heading: 'Up next', tasks: data.upcoming, empty: 'Nothing waiting.' },
+    { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.', quiet: true },
+    { heading: 'In progress', tasks: data.inProgress, empty: 'Nothing started yet.', quiet: false },
+    { heading: 'Up next', tasks: data.upcoming, empty: 'Nothing waiting.', quiet: false },
   ]
 
   return (
     <div className="flex flex-col gap-4">
       {groups.map((group) => (
-        <div key={group.heading} className="flex flex-col gap-1.5">
-          <h3 className="px-2.5 font-mono text-[10px] font-semibold tracking-[0.05em] text-dim uppercase">
-            {group.heading}
+        <div
+          key={group.heading}
+          className={`flex flex-col gap-2.5 ${group.quiet ? 'opacity-60' : ''}`}
+        >
+          <h3 className="px-1.5 font-mono text-[11px] font-medium tracking-[0.05em] text-dim uppercase">
+            {`${group.heading} · ${group.tasks.length}`}
           </h3>
           {group.tasks.length === 0 ? (
-            <p className="px-2.5 text-[13px] text-dim">{group.empty}</p>
+            <p className="px-1.5 text-[13px] text-dim">{group.empty}</p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="flex flex-col gap-0.5">
               {group.tasks.map((task) => (
                 <TicketRow key={task.id} task={task} />
               ))}
@@ -86,16 +82,16 @@ function TicketGroups({ data }: { data: TasksResponse }) {
 function TicketRow({ task }: { task: Task }) {
   const done = task.statusType === 'completed'
   return (
-    <li className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2.5">
+    <li className="flex items-center gap-2.5 rounded-md px-1.5 py-2">
       <span
-        className={`size-2 shrink-0 rounded-full ${dotFor[task.statusType]}`}
+        className={`size-1.5 shrink-0 rounded-full ${dotFor[task.statusType]}`}
         aria-hidden="true"
       />
-      <span className="min-w-[58px] shrink-0 font-mono text-xs text-dim">{task.identifier}</span>
-      <span className={`flex-1 truncate text-[13.5px] ${done ? 'text-dim line-through' : ''}`}>
+      <span className="min-w-[44px] shrink-0 font-mono text-xs text-dim">{task.identifier}</span>
+      <span className={`flex-1 truncate text-[13.5px] ${done ? 'text-muted line-through' : ''}`}>
         {task.title}
       </span>
-      <span className="min-w-[78px] shrink-0 text-right font-mono text-[11px] text-dim">
+      <span className="min-w-[60px] shrink-0 text-right font-mono text-[11px] text-dim">
         {task.status}
       </span>
     </li>

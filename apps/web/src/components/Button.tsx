@@ -3,12 +3,13 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 type Variant = 'primary' | 'secondary' | 'danger' | 'quiet'
 
 const base =
-  'inline-flex w-fit items-center gap-2 rounded-lg font-semibold transition-colors ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ' +
+  'inline-flex w-fit items-center gap-2 rounded-md font-semibold transition-colors ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ' +
   'disabled:cursor-not-allowed disabled:opacity-45'
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-accent text-bg font-bold hover:bg-accent/90',
+  // Off-white on black, never a coloured fill: colour is reserved for "active".
+  primary: 'bg-text text-bg hover:bg-text/90',
   secondary: 'border border-line-strong text-text hover:bg-raised',
   danger: 'border border-red/35 text-red hover:bg-red/10',
   quiet: 'border border-line-strong text-muted hover:bg-raised',
