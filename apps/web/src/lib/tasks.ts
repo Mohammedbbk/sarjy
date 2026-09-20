@@ -49,7 +49,11 @@ async function fetchTasks({ signal }: { signal: AbortSignal }): Promise<TasksRes
 function isTasksResponse(body: unknown): body is TasksResponse {
   if (typeof body !== 'object' || body === null) return false
   const candidate = body as Partial<TasksResponse>
-  return Array.isArray(candidate.tasks) && typeof candidate.count === 'number'
+  return (
+    Array.isArray(candidate.done) &&
+    Array.isArray(candidate.inProgress) &&
+    Array.isArray(candidate.upcoming)
+  )
 }
 
 /**

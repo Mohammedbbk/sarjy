@@ -20,7 +20,16 @@ const TASK = {
 }
 
 function tasksResponse(overrides: Partial<TasksResponse> = {}): TasksResponse {
-  return { source: 'linear', teamKey: 'SAR', count: 1, hasMore: false, tasks: [TASK], ...overrides }
+  return {
+    source: 'linear',
+    teamKey: 'SAR',
+    done: [],
+    inProgress: [TASK],
+    upcoming: [],
+    openCount: 1,
+    hasMore: false,
+    ...overrides,
+  }
 }
 
 /** Mount the panel with its own cache, so tests never share query state. */
@@ -85,11 +94,11 @@ describe('TicketPanel', () => {
   })
 
   it('distinguishes an empty list from a failure', async () => {
-    mockFetchSequence(Response.json(tasksResponse({ count: 0, tasks: [] })))
+    mockFetchSequence(Response.json(tasksResponse({ openCount: 0, inProgress: [] })))
 
     mount()
 
-    expect(await screen.findByText(/No open tickets on this team/)).toBeTruthy()
+    expect(await screen.findByText(/No tickets on this team yet/)).toBeTruthy()
     expect(screen.getByText('0 open')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull()
   })

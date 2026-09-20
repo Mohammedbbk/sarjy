@@ -32,7 +32,10 @@ describe('GET /api/tasks', () => {
       ok: true,
       teamKey: 'SAR',
       teamName: 'Sarjy',
-      tasks: [TASK],
+      done: [],
+      inProgress: [TASK],
+      upcoming: [],
+      openCount: 1,
       hasMore: true,
     })
 
@@ -44,9 +47,11 @@ describe('GET /api/tasks', () => {
     expect(body).toEqual({
       source: 'linear',
       teamKey: 'SAR',
-      count: 1,
+      done: [],
+      inProgress: [TASK],
+      upcoming: [],
+      openCount: 1,
       hasMore: true,
-      tasks: [TASK],
     })
   })
 
@@ -55,7 +60,10 @@ describe('GET /api/tasks', () => {
       ok: true,
       teamKey: 'SAR',
       teamName: 'Sarjy',
-      tasks: [],
+      done: [],
+      inProgress: [],
+      upcoming: [],
+      openCount: 0,
       hasMore: false,
     })
 
@@ -63,8 +71,10 @@ describe('GET /api/tasks', () => {
     const body = (await response.json()) as TasksResponse
 
     expect(response.status).toBe(200)
-    expect(body.count).toBe(0)
-    expect(body.tasks).toEqual([])
+    expect(body.openCount).toBe(0)
+    expect(body.done).toEqual([])
+    expect(body.inProgress).toEqual([])
+    expect(body.upcoming).toEqual([])
   })
 
   it('takes no team parameter — a team key in the query string is ignored', async () => {
@@ -72,7 +82,10 @@ describe('GET /api/tasks', () => {
       ok: true,
       teamKey: 'SAR',
       teamName: 'Sarjy',
-      tasks: [],
+      done: [],
+      inProgress: [],
+      upcoming: [],
+      openCount: 0,
       hasMore: false,
     })
 

@@ -23,6 +23,7 @@ const STATES = [
   { id: 'state-todo', name: 'Todo', type: 'unstarted' },
   { id: 'state-progress', name: 'In Progress', type: 'started' },
   { id: 'state-review', name: 'In Review', type: 'started' },
+  { id: 'state-done', name: 'Done', type: 'completed' },
 ]
 
 const ISSUE = {
@@ -35,20 +36,29 @@ const ISSUE = {
   stateId: 'state-progress',
 }
 
-/** A fake team holding `issues`, as `client.teams()` returns it. */
-function fakeTeam(issues: object[] = [ISSUE]) {
+/**
+ * A fake team, as `client.teams()` returns it. `issues` answers the open-issue
+ * query; `completed` answers the one filtered to completed issues.
+ */
+function fakeTeam(issues: object[] = [ISSUE], completed: object[] = []) {
   const update = vi.fn().mockResolvedValue({ success: true })
+  const withUpdate = (nodes: object[]) => nodes.map((issue) => ({ ...issue, update }))
   const team = {
     key: 'SAR',
     name: 'Sarjy',
-    issues: vi.fn().mockResolvedValue({
-      nodes: issues.map((issue) => ({ ...issue, update })),
+    issues: vi.fn(async (variables?: { filter?: { state?: { type?: { eq?: string } } } }) => ({
+      nodes: withUpdate(variables?.filter?.state?.type?.eq === 'completed' ? completed : issues),
       pageInfo: { hasNextPage: false },
-    }),
+    })),
     states: vi.fn().mockResolvedValue({ nodes: STATES }),
   }
   client.teams.mockResolvedValue({ nodes: [team] })
   return { team, update }
+}
+
+/** A ticket as Linear returns it, before grouping. */
+function issue(overrides: Partial<typeof ISSUE> & { id: string }) {
+  return { ...ISSUE, ...overrides }
 }
 
 beforeEach(() => {
@@ -57,31 +67,51 @@ beforeEach(() => {
 })
 
 describe('fetchStandupTasks', () => {
-  it('returns the team and its open issues as tasks', async () => {
-    const { team } = fakeTeam()
-
-    expect(await fetchStandupTasks(ENV)).toEqual({
-      ok: true,
-      teamKey: 'SAR',
-      teamName: 'Sarjy',
-      hasMore: false,
-      tasks: [
-        {
-          id: 'issue-uuid',
-          identifier: 'SAR-4',
-          title: 'Wire the ticket rail to Linear',
-          status: 'In Progress',
-          statusType: 'started',
-          priority: 2,
-          priorityLabel: 'High',
-          url: 'https://linear.app/sarjy/issue/SAR-4',
-        },
+  it('groups issues into done, in progress and up next', async () => {
+    const { team } = fakeTeam(
+      [
+        issue({ id: 'low', identifier: 'SAR-1', stateId: 'state-todo', priority: 4 }),
+        issue({ id: 'urgent', identifier: 'SAR-2', stateId: 'state-todo', priority: 1 }),
+        issue({ id: 'none', identifier: 'SAR-3', stateId: 'state-todo', priority: 0 }),
+        issue({ id: 'high', identifier: 'SAR-4', stateId: 'state-todo', priority: 2 }),
+        issue({ id: 'started', identifier: 'SAR-5', stateId: 'state-progress', priority: 3 }),
       ],
+      [issue({ id: 'done', identifier: 'SAR-9', stateId: 'state-done' })],
+    )
+
+    const result = await fetchStandupTasks(ENV)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.done.map((t) => t.identifier)).toEqual(['SAR-9'])
+    expect(result.done[0]!.statusType).toBe('completed')
+    expect(result.inProgress.map((t) => t.identifier)).toEqual(['SAR-5'])
+    // Most urgent first, and "no priority" last. Only three fit.
+    expect(result.upcoming.map((t) => t.identifier)).toEqual(['SAR-2', 'SAR-4', 'SAR-1'])
+    expect(result.openCount).toBe(5)
+    expect(team.issues).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: { state: { type: { eq: 'completed' } } }, first: 3 }),
+    )
+  })
+
+  it('maps an issue to a task with its state name and category', async () => {
+    fakeTeam()
+
+    const result = await fetchStandupTasks(ENV)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.inProgress[0]).toEqual({
+      id: 'issue-uuid',
+      identifier: 'SAR-4',
+      title: 'Wire the ticket rail to Linear',
+      status: 'In Progress',
+      statusType: 'started',
+      priority: 2,
+      priorityLabel: 'High',
+      url: 'https://linear.app/sarjy/issue/SAR-4',
     })
     expect(client.teams).toHaveBeenCalledWith({ filter: { key: { eqIgnoreCase: 'sar' } } })
-    expect(team.issues).toHaveBeenCalledWith(
-      expect.objectContaining({ filter: { state: { type: { nin: ['completed', 'canceled'] } } } }),
-    )
   })
 
   it('reports a team key that matches no team', async () => {

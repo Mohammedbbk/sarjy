@@ -1,4 +1,4 @@
-import type { Task, TaskStatusType } from '../../shared/tasks'
+import type { Task, TasksResponse, TaskStatusType } from '../../shared/tasks'
 import { useTasks, TasksRequestError } from '../lib/tasks'
 import { Button } from './Button'
 
@@ -7,6 +7,7 @@ const dotFor: Record<TaskStatusType, string> = {
   triage: 'bg-accent',
   unstarted: 'border-[1.5px] border-muted',
   backlog: 'border-[1.5px] border-dimmer',
+  completed: 'bg-dimmer',
 }
 
 export function TicketPanel() {
@@ -20,7 +21,7 @@ export function TicketPanel() {
             Linear tickets
           </h2>
           <span className="font-mono text-xs text-dim">
-            {data ? `${data.count}${data.hasMore ? '+' : ''} open` : '—'}
+            {data ? `${data.openCount}${data.hasMore ? '+' : ''} open` : '—'}
           </span>
         </div>
         <p className="flex flex-wrap items-center gap-2 text-xs leading-relaxed text-dim">
@@ -36,46 +37,68 @@ export function TicketPanel() {
           <TicketSkeleton />
         ) : error ? (
           <TicketError error={error} onRetry={() => void refetch()} isRetrying={isFetching} />
-        ) : data.tasks.length === 0 ? (
+        ) : data.openCount === 0 && data.done.length === 0 ? (
           <TicketsEmpty />
         ) : (
-          <TicketList tasks={data.tasks} hasMore={data.hasMore} />
+          <TicketGroups data={data} />
         )}
       </div>
     </section>
   )
 }
 
-function TicketList({ tasks, hasMore }: { tasks: Task[]; hasMore: boolean }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-1">
-        {tasks.map((task) => (
-          <li
-            key={task.id}
-            className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2.5"
-          >
-            <span
-              className={`size-2 shrink-0 rounded-full ${dotFor[task.statusType]}`}
-              aria-hidden="true"
-            />
-            <span className="min-w-[58px] shrink-0 font-mono text-xs text-dim">
-              {task.identifier}
-            </span>
-            <span className="flex-1 truncate text-[13.5px]">{task.title}</span>
-            <span className="min-w-[78px] shrink-0 text-right font-mono text-[11px] text-dim">
-              {task.status}
-            </span>
-          </li>
-        ))}
-      </ul>
+/** The three groups, in the order a stand-up walks through them. */
+function TicketGroups({ data }: { data: TasksResponse }) {
+  const groups = [
+    { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.' },
+    { heading: 'In progress', tasks: data.inProgress, empty: 'Nothing started yet.' },
+    { heading: 'Up next', tasks: data.upcoming, empty: 'Nothing waiting.' },
+  ]
 
-      {hasMore && (
+  return (
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div key={group.heading} className="flex flex-col gap-1.5">
+          <h3 className="px-2.5 font-mono text-[10px] font-semibold tracking-[0.05em] text-dim uppercase">
+            {group.heading}
+          </h3>
+          {group.tasks.length === 0 ? (
+            <p className="px-2.5 text-[13px] text-dim">{group.empty}</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {group.tasks.map((task) => (
+                <TicketRow key={task.id} task={task} />
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+
+      {data.hasMore && (
         <p className="px-2.5 text-xs leading-relaxed text-dim">
-          Showing the {tasks.length} most recently updated. The team has more open tickets.
+          The team has more open tickets than these.
         </p>
       )}
     </div>
+  )
+}
+
+function TicketRow({ task }: { task: Task }) {
+  const done = task.statusType === 'completed'
+  return (
+    <li className="flex items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2.5">
+      <span
+        className={`size-2 shrink-0 rounded-full ${dotFor[task.statusType]}`}
+        aria-hidden="true"
+      />
+      <span className="min-w-[58px] shrink-0 font-mono text-xs text-dim">{task.identifier}</span>
+      <span className={`flex-1 truncate text-[13.5px] ${done ? 'text-dim line-through' : ''}`}>
+        {task.title}
+      </span>
+      <span className="min-w-[78px] shrink-0 text-right font-mono text-[11px] text-dim">
+        {task.status}
+      </span>
+    </li>
   )
 }
 
@@ -96,7 +119,7 @@ function TicketSkeleton() {
 function TicketsEmpty() {
   return (
     <p className="px-2.5 text-[13.5px] leading-relaxed text-dim">
-      No open tickets on this team. Nothing to review today.
+      No tickets on this team yet. Nothing to review today.
     </p>
   )
 }

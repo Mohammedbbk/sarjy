@@ -24,27 +24,40 @@ export type Task = {
 }
 
 /**
- * Linear's workflow state categories, minus the closed ones the endpoint
- * filters out. Anything unrecognised is normalised to `unstarted`.
+ * Linear's workflow state categories the endpoint reports. `canceled` issues
+ * are left out entirely. Anything unrecognised is normalised to `unstarted`.
  */
-export type TaskStatusType = 'triage' | 'backlog' | 'unstarted' | 'started'
+export type TaskStatusType = 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed'
 
 export const TASK_STATUS_TYPES: readonly TaskStatusType[] = [
   'triage',
   'backlog',
   'unstarted',
   'started',
+  'completed',
 ]
 
+/** How many tickets each group holds at most. */
+export const GROUP_SIZE = 3
+
+/**
+ * The stand-up at a glance: what was just finished, what is being worked on,
+ * and what comes next. Each group holds at most `GROUP_SIZE` tickets.
+ */
 export type TasksResponse = {
   source: 'linear'
   /** The demo team's key, as Linear spells it. Fixed by server config. */
   teamKey: string
-  /** Number of tasks in `tasks`. Always equal to `tasks.length`. */
-  count: number
-  /** True when the team has further open issues beyond the ones returned. */
+  /** Most recently completed first. */
+  done: Task[]
+  /** Started tickets, most urgent first. */
+  inProgress: Task[]
+  /** Not started yet (unstarted, backlog or triage), most urgent first. */
+  upcoming: Task[]
+  /** How many open tickets the team has in total, ignoring the group limit. */
+  openCount: number
+  /** True when there are more open tickets than the groups show. */
   hasMore: boolean
-  tasks: Task[]
 }
 
 /**

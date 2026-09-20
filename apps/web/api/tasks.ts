@@ -1,17 +1,7 @@
-/**
- * Stand-up task lookup.
- *
- * The team is fixed by server configuration (`LINEAR_TEAM_KEY`); there is no
- * query parameter for it. Read-only: there is no write path here.
- */
 import type { TasksError, TasksResponse } from '../shared/tasks.js'
 import { json } from './_lib/http.js'
 import { fetchStandupTasks, type LinearErrorCode } from './_lib/linear.js'
 
-/**
- * How a Linear failure is reported to the caller. The detailed reason stays in
- * the server log; the browser gets a coarse code and a message safe to render.
- */
 const FAILURES: Record<LinearErrorCode, { status: number; body: TasksError }> = {
   not_configured: {
     status: 500,
@@ -42,7 +32,7 @@ const FAILURES: Record<LinearErrorCode, { status: number; body: TasksError }> = 
     status: 502,
     body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
   },
-  // Only updateTask produces these; listed so every code has an answer.
+
   task_not_found: {
     status: 502,
     body: { error: 'upstream_error', message: 'Linear returned an unexpected response.' },
@@ -69,9 +59,11 @@ export async function GET(request: Request): Promise<Response> {
   const body: TasksResponse = {
     source: 'linear',
     teamKey: result.teamKey,
-    count: result.tasks.length,
+    done: result.done,
+    inProgress: result.inProgress,
+    upcoming: result.upcoming,
+    openCount: result.openCount,
     hasMore: result.hasMore,
-    tasks: result.tasks,
   }
 
   return json(200, body)
