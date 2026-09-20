@@ -21,6 +21,10 @@ const SERVER_ENV_KEYS = [
   'LIVEKIT_AGENT_DEPLOYMENT',
   'LINEAR_API_KEY',
   'LINEAR_TEAM_KEY',
+  'SUPABASE_URL',
+  'SUPABASE_SECRET_KEY',
+  'MEMORY_API_TOKEN',
+  'LINEAR_WRITES_ENABLED',
 ]
 
 type WebHandler = (request: Request) => Response | Promise<Response>

@@ -2,10 +2,6 @@ import type { Task, TaskStatusType } from '../../shared/tasks'
 import { useTasks, TasksRequestError } from '../lib/tasks'
 import { Button } from './Button'
 
-/**
- * Dot styling per workflow state category. Keyed on Linear's state type, not
- * the state name: names are configured per workspace.
- */
 const dotFor: Record<TaskStatusType, string> = {
   started: 'bg-amber',
   triage: 'bg-accent',
@@ -14,11 +10,9 @@ const dotFor: Record<TaskStatusType, string> = {
 }
 
 type Props = {
-  /** Ticket the conversation is currently about, by identifier (e.g. SAR-4). */
   highlightId?: string
 }
 
-/** The demo team's open Linear tickets, live from GET /api/tasks. */
 export function TicketPanel({ highlightId }: Props) {
   const { data, error, isPending, isFetching, refetch } = useTasks()
 
@@ -37,7 +31,7 @@ export function TicketPanel({ highlightId }: Props) {
           <span className="inline-flex shrink-0 items-center rounded-md border border-line bg-raised px-2 py-0.5 font-mono text-[10px] font-semibold tracking-[0.05em] text-muted uppercase">
             Demo workspace
           </span>
-          Live from Linear, read-only. Sarjy cannot update tickets yet.
+          Live from Linear. Sarjy only changes a ticket after you confirm.
         </p>
       </div>
 
@@ -102,7 +96,6 @@ function TicketList({
   )
 }
 
-/** Placeholder rows at the shape of real ones, so the rail does not jump. */
 function TicketSkeleton() {
   return (
     <ul className="flex animate-pulse flex-col gap-1" aria-label="Loading tickets">

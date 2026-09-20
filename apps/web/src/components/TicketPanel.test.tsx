@@ -139,13 +139,13 @@ describe('TicketPanel', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/tasks')
   })
 
-  it('always states that tickets are read-only, under the demo workspace label', async () => {
+  it('states how tickets change, under the demo workspace label', async () => {
     mockFetchSequence(Response.json(tasksResponse()))
 
     mount()
     await screen.findByText('SAR-4')
 
     expect(screen.getByText('Demo workspace')).toBeTruthy()
-    expect(screen.getByText(/Sarjy cannot update tickets yet/)).toBeTruthy()
+    expect(screen.getByText(/only changes a ticket after you confirm/)).toBeTruthy()
   })
 })

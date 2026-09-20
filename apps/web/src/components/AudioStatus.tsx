@@ -1,6 +1,23 @@
+import type { useAgent } from '@livekit/components-react'
 import { DotsIcon, MicIcon, MicOffIcon, WaveIcon } from './icons'
 
 export type AudioState = 'connecting' | 'listening' | 'speaking' | 'thinking' | 'muted'
+
+function toAudioState(
+  agentState: ReturnType<typeof useAgent>['state'],
+  microphoneEnabled: boolean,
+  connected: boolean,
+): AudioState {
+  if (connected && !microphoneEnabled) return 'muted'
+  switch (agentState) {
+    case 'listening':
+    case 'thinking':
+    case 'speaking':
+      return agentState
+    default:
+      return 'connecting'
+  }
+}
 
 const content: Record<AudioState, { label: string; Icon: typeof MicIcon }> = {
   connecting: { label: 'Connecting', Icon: DotsIcon },
@@ -10,8 +27,12 @@ const content: Record<AudioState, { label: string; Icon: typeof MicIcon }> = {
   muted: { label: 'Mic muted', Icon: MicOffIcon },
 }
 
-/** Mic/voice state pill, driven by the LiveKit connection and agent state. */
-export function AudioStatus({ state }: { state: AudioState }) {
+export function AudioStatus({ agentState, microphoneEnabled, connected }: {
+  agentState: ReturnType<typeof useAgent>['state']
+  microphoneEnabled: boolean
+  connected: boolean
+}) {
+  const state = toAudioState(agentState, microphoneEnabled, connected)
   const { label, Icon } = content[state]
   const quiet = state === 'muted' || state === 'connecting'
 

@@ -1,4 +1,6 @@
-import { ConnectionState } from 'livekit-client'
+import { useAgent, useAudioPlayback, useSessionContext, useTrackToggle } from '@livekit/components-react'
+import { useEffect, useState } from 'react'
+import { ConnectionState, RoomEvent, Track } from 'livekit-client'
 import { AudioStatus } from '../components/AudioStatus'
 import { Button } from '../components/Button'
 import { ConnectingNotice, ConnectionNotice } from '../components/ConnectionNotice'
@@ -7,12 +9,12 @@ import { TicketPanel } from '../components/TicketPanel'
 import { Transcript } from '../components/Transcript'
 import { CloseIcon, MicIcon, MicOffIcon } from '../components/icons'
 import type { useStandup } from '../lib/useStandup'
+import { describeStartError, type StandupError } from '../lib/session'
 
 type Props = {
   standup: ReturnType<typeof useStandup>
 }
 
-/** What is happening before the agent can hear you, in words. */
 function connectingLabel(agentState: string): string {
   switch (agentState) {
     case 'connecting':
@@ -26,30 +28,35 @@ function connectingLabel(agentState: string): string {
   }
 }
 
-/** Live: the stand-up is running on a real LiveKit session. */
 export function LiveView({ standup }: Props) {
-  const {
-    agentState,
-    audioState,
-    canListen,
-    canPlayAudio,
-    connection,
-    dismissError,
-    end,
-    error,
-    isConnected,
-    isMicrophoneBusy,
-    isMicrophoneEnabled,
-    reset,
-    retry,
-    startAudio,
-    toggleMicrophone,
-    turns,
-  } = standup
+  const { state, turns, start, end, reset } = standup
+  const session = useSessionContext()
+  const { state: agentState, canListen } = useAgent(session)
+  const { canPlayAudio, startAudio } = useAudioPlayback(session.room)
+  const { connectionState: connection, isConnected } = session
+  const [microphoneError, setMicrophoneError] = useState<StandupError | null>(null)
+  const { enabled: isMicrophoneEnabled, buttonProps } = useTrackToggle({
+    room: session.room,
+    source: Track.Source.Microphone,
+    onDeviceError: (error) => setMicrophoneError(describeStartError(error)),
+  })
 
-  // A failure before we are in the room replaces the conversation; one during
-  // the call is a banner over a stand-up that is still running.
-  const blocked = error !== null && !isConnected
+  useEffect(() => {
+    const onError = (error: Error) => setMicrophoneError(describeStartError(error))
+    session.room.on(RoomEvent.MediaDevicesError, onError)
+    return () => {
+      session.room.off(RoomEvent.MediaDevicesError, onError)
+    }
+  }, [session.room])
+
+  function retry() {
+    setMicrophoneError(null)
+    start()
+  }
+
+  const dismissError = () => setMicrophoneError(null)
+  const blocked = state.status === 'failed'
+  const error = blocked ? state.error : microphoneError
 
   const reconnecting =
     connection === ConnectionState.Reconnecting ||
@@ -57,7 +64,11 @@ export function LiveView({ standup }: Props) {
 
   return (
     <Workspace rail={<TicketPanel />}>
-      <AudioStatus state={audioState} />
+      <AudioStatus
+        agentState={agentState}
+        microphoneEnabled={isMicrophoneEnabled}
+        connected={isConnected}
+      />
 
       {reconnecting && (
         <p className="text-sm text-amber" aria-live="polite">
@@ -69,8 +80,8 @@ export function LiveView({ standup }: Props) {
         <ConnectionNotice
           error={error}
           variant={blocked ? 'blocking' : 'inline'}
-          onRetry={blocked ? retry : dismissError}
-          onDismiss={blocked ? () => void reset() : dismissError}
+          onRetry={retry}
+          onDismiss={blocked ? reset : dismissError}
         />
       )}
 
@@ -87,23 +98,17 @@ export function LiveView({ standup }: Props) {
           <ConnectingNotice label={connectingLabel(agentState)} />
         ))}
 
-      {/*
-        The stage track (Review · Blockers · Today · Confirm) and ticket
-        proposals are not shown: the agent reports no workflow position and
-        cannot change a ticket, so any progress we drew here would be invented.
-      */}
-
       <div className="mt-auto flex flex-wrap items-center gap-3 border-t border-line pt-6">
         <Button
+          {...buttonProps}
           variant="secondary"
           aria-pressed={!isMicrophoneEnabled}
-          disabled={!isConnected || isMicrophoneBusy}
-          onClick={() => void toggleMicrophone()}
+          disabled={blocked || !isConnected || buttonProps.disabled}
         >
           {isMicrophoneEnabled ? <MicIcon /> : <MicOffIcon />}
           {isMicrophoneEnabled ? 'Mute' : 'Unmute'}
         </Button>
-        <Button variant="danger" onClick={() => void end()}>
+        <Button variant="danger" onClick={end}>
           <CloseIcon />
           End
         </Button>

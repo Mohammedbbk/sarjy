@@ -14,6 +14,9 @@ export function Header({ children }: { children?: ReactNode }) {
       <span className="inline-flex items-center rounded-md border border-line bg-raised px-2.5 py-1 text-[11px] font-semibold tracking-[0.05em] text-muted uppercase">
         Demo workspace
       </span>
+      <span className="text-[11px] text-muted">
+        Shared demo — memory is shared across all visitors.
+      </span>
       {children ? <div className="ms-auto">{children}</div> : null}
     </header>
   )
