@@ -40,15 +40,25 @@ describe('fetchStandupTasks — success', () => {
       jsonResponse({
         source: 'linear',
         teamKey: 'SAR',
-        count: 1,
+        done: [],
+        inProgress: [TASK],
+        upcoming: [],
+        openCount: 1,
         hasMore: true,
-        tasks: [TASK],
       }),
     );
 
     const result = await fetchStandupTasks(ENV);
 
-    expect(result).toEqual({ ok: true, teamKey: 'SAR', tasks: [TASK], hasMore: true });
+    expect(result).toEqual({
+      ok: true,
+      teamKey: 'SAR',
+      done: [],
+      inProgress: [TASK],
+      upcoming: [],
+      openCount: 1,
+      hasMore: true,
+    });
 
     const [url] = fetchMock.mock.calls[0]!;
     expect(url.toString()).toBe('http://localhost:5173/api/tasks');
@@ -57,7 +67,15 @@ describe('fetchStandupTasks — success', () => {
 
   it('bounds the request with an abort signal', async () => {
     const fetchMock = mockFetch(
-      jsonResponse({ source: 'linear', teamKey: 'SAR', count: 0, hasMore: false, tasks: [] }),
+      jsonResponse({
+        source: 'linear',
+        teamKey: 'SAR',
+        done: [],
+        inProgress: [],
+        upcoming: [],
+        openCount: 0,
+        hasMore: false,
+      }),
     );
 
     await fetchStandupTasks(ENV);
@@ -69,12 +87,28 @@ describe('fetchStandupTasks — success', () => {
 describe('fetchStandupTasks — empty results', () => {
   it('treats no open tickets as success, not failure', async () => {
     mockFetch(
-      jsonResponse({ source: 'linear', teamKey: 'SAR', count: 0, hasMore: false, tasks: [] }),
+      jsonResponse({
+        source: 'linear',
+        teamKey: 'SAR',
+        done: [],
+        inProgress: [],
+        upcoming: [],
+        openCount: 0,
+        hasMore: false,
+      }),
     );
 
     const result = await fetchStandupTasks(ENV);
 
-    expect(result).toEqual({ ok: true, teamKey: 'SAR', tasks: [], hasMore: false });
+    expect(result).toEqual({
+      ok: true,
+      teamKey: 'SAR',
+      done: [],
+      inProgress: [],
+      upcoming: [],
+      openCount: 0,
+      hasMore: false,
+    });
   });
 });
 

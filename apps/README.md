@@ -42,10 +42,9 @@ The endpoint takes no parameters. The team is pinned by `LINEAR_TEAM_KEY` on the
 server, so a caller cannot point it at another team, and it exposes only our
 dedicated demo team rather than arbitrary workspace data.
 
-It is read-only end to end: the Linear client sends queries and never mutations,
-and there is no write path in either app. **Ticket updates are not supported
-yet** — Sarjy can read and discuss a ticket, and is instructed never to claim it
-changed one.
+Ticket status changes and comments use authenticated `POST /api/task-updates`,
+enabled only when `LINEAR_WRITES_ENABLED=true`. The agent is instructed to ask
+for confirmation before each change. Both apps need the same `MEMORY_API_TOKEN`.
 
 ## Setup
 
@@ -61,7 +60,7 @@ cp sarjy-agent/.env.example sarjy-agent/.env.local
 # then fill in, following the comments in each file:
 #   both apps   LIVEKIT_URL / LIVEKIT_API_KEY / LIVEKIT_API_SECRET
 #   web only    LINEAR_API_KEY / LINEAR_TEAM_KEY
-#   agent only  SARJY_API_URL  (http://localhost:5173 locally)
+#   agent only  SARJY_API_URL  (http://localhost:5180 locally)
 
 pnpm --dir web install
 pnpm --dir sarjy-agent install
@@ -91,7 +90,7 @@ Two terminals, from `apps/`:
 # 1. The agent worker. Registers with LiveKit and waits to be dispatched.
 pnpm --dir sarjy-agent dev
 
-# 2. The frontend and the API together, on http://localhost:5173
+# 2. The frontend and the API together, on http://localhost:5180
 pnpm --dir web dev
 ```
 
@@ -100,17 +99,17 @@ the handlers in `api/` into the dev server, so `POST /api/session` is answered
 by the same module Vercel deploys as a function. There is no second process and
 no proxy to one.
 
-Open <http://localhost:5173>, press **Start stand-up**, and allow the
+Open <http://localhost:5180>, press **Start stand-up**, and allow the
 microphone when the browser asks.
 
 To check the endpoint on its own:
 
 ```sh
-curl -i -X POST http://localhost:5173/api/session \
+curl -i -X POST http://localhost:5180/api/session \
   -H 'Content-Type: application/json' -d '{}'
 # → 201 {"server_url":"wss://…","participant_token":"eyJ…"}
 
-curl -i http://localhost:5173/api/tasks
+curl -i http://localhost:5180/api/tasks
 # → 200 {"source":"linear","teamKey":"SAR","count":4,"hasMore":false,"tasks":[…]}
 ```
 
@@ -157,11 +156,10 @@ Real: the LiveKit room, your microphone, the agent's voice, the transcript on
 screen, the connecting / listening / thinking / speaking indicator, and the
 **Linear ticket list** — read live from Linear through `GET /api/tasks`.
 
-Not real: anything that would require writing. There is no database and no write
-path, so nothing a stand-up produces is stored — no ticket updates, no stage
-progress, no written summary, and no memory of a previous session. `StageTrack`
-and `ProposalCard` in `apps/web/src/components` are kept but mounted nowhere,
-for exactly that reason. The agent is instructed never to claim otherwise.
+Ticket updates are available when enabled. Facts and preferences persist in
+shared Supabase memory; see [memory setup](../supabase/README.md). All visitors
+share the same demo identity. Transcripts remain in the browser for the current
+session; written summaries and stage tracking are not implemented.
 
 The workspace is a dedicated demo team with fictional tickets, which is what the
 **Demo workspace** label in the header and footer refers to.

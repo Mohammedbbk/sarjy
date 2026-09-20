@@ -52,7 +52,9 @@ export default defineAgent({
 
     // Greet the user on joining
     session.generateReply({
-      instructions: 'Greet the user in a helpful and friendly manner.',
+      instructions:
+        'Greet the user, then follow your instructions for opening the stand-up: ' +
+        'call get_tasks, say what they finished most recently, and read out what is up next.',
     });
   },
 });

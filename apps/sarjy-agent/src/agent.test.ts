@@ -37,7 +37,10 @@ describe('get_tasks tool', () => {
       ok: true,
       teamKey: 'ENG',
       teamName: 'Engineering',
-      tasks,
+      done: [],
+      inProgress: tasks,
+      upcoming: [],
+      openCount: 1,
       hasMore: true,
     });
 
@@ -45,9 +48,11 @@ describe('get_tasks tool', () => {
       ok: true,
       source: 'linear',
       teamKey: 'ENG',
-      count: 1,
+      done: [],
+      inProgress: tasks,
+      upcoming: [],
+      openCount: 1,
       hasMore: true,
-      tasks,
     });
   });
 
@@ -56,16 +61,21 @@ describe('get_tasks tool', () => {
       ok: true,
       teamKey: 'ENG',
       teamName: 'Engineering',
-      tasks: [],
+      done: [],
+      inProgress: [],
+      upcoming: [],
+      openCount: 0,
       hasMore: false,
     });
 
     await expect(runTool()).resolves.toMatchObject({
       ok: true,
       source: 'linear',
-      count: 0,
+      openCount: 0,
       hasMore: false,
-      tasks: [],
+      done: [],
+      inProgress: [],
+      upcoming: [],
     });
   });
 

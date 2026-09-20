@@ -5,8 +5,7 @@ import {
   useSessionContext,
 } from '@livekit/components-react'
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query'
-import { DemoFooter } from './components/DemoControls'
-import { Header } from './components/Layout'
+import { DemoFooter, Header } from './components/Layout'
 import { tokenSource } from './lib/session'
 import { TASKS_QUERY_KEY } from './lib/tasks'
 import { useStandup } from './lib/useStandup'
@@ -16,12 +15,9 @@ import { LiveView } from './views/LiveView'
 
 const SESSION_OPTIONS = { agentConnectTimeoutMilliseconds: 20_000 }
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false, refetchOnReconnect: false } },
-})
+const queryClient = new QueryClient()
 
 export default function App() {
-
   const session = useSession(tokenSource, SESSION_OPTIONS)
 
   return (

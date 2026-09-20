@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 /** Product header: logo, wordmark and the demo-workspace badge. */
-export function Header({ children }: { children?: ReactNode }) {
+export function Header() {
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3 sm:px-8 sm:py-0 sm:h-16">
       <span
@@ -17,8 +17,19 @@ export function Header({ children }: { children?: ReactNode }) {
       <span className="text-[11px] text-muted">
         Shared demo — memory is shared across all visitors.
       </span>
-      {children ? <div className="ms-auto">{children}</div> : null}
     </header>
+  )
+}
+
+export function DemoFooter() {
+  return (
+    <footer className="border-t border-line px-5 py-3 sm:px-8">
+      <p className="text-xs leading-relaxed text-dim">
+        <span className="font-mono tracking-[0.05em] text-muted uppercase">Demo workspace</span> —
+        the voice call, transcript, agent status and Linear tickets are live. Sarjy only changes a
+        ticket's status or adds a comment after you confirm it out loud.
+      </p>
+    </footer>
   )
 }
 

@@ -1,18 +1,8 @@
-/**
- * Stand-up task lookup, via the web app's backend.
- *
- * The agent holds no Linear credentials; it calls GET /api/tasks, which owns
- * them. `SARJY_API_URL` points at that server and is never logged.
- */
+
 import { z } from 'zod';
 
-/** Bound on the whole request. Longer than the backend's own 6s Linear budget. */
 const TIMEOUT_MS = 10_000;
 
-/**
- * The GET /api/tasks response, validated rather than trusted: the agent and the
- * web app deploy separately and can be different versions.
- */
 const TaskSchema = z.object({
   id: z.string(),
   identifier: z.string(),
@@ -27,12 +17,13 @@ const TaskSchema = z.object({
 const TasksResponseSchema = z.object({
   source: z.literal('linear'),
   teamKey: z.string(),
-  count: z.number(),
+  done: z.array(TaskSchema),
+  inProgress: z.array(TaskSchema),
+  upcoming: z.array(TaskSchema),
+  openCount: z.number(),
   hasMore: z.boolean(),
-  tasks: z.array(TaskSchema),
 });
 
-/** The endpoint's own failure body. Its `error` is carried through as-is. */
 const TasksErrorSchema = z.object({
   error: z.string(),
   message: z.string(),
@@ -40,10 +31,6 @@ const TasksErrorSchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>;
 
-/**
- * Why a lookup failed. `not_configured` is ours; `server_not_configured`,
- * `upstream_unavailable` and `upstream_error` come from the backend.
- */
 export type TasksErrorCode =
   | 'not_configured'
   | 'server_not_configured'
@@ -57,16 +44,15 @@ export type TasksErrorCode =
 export type TasksResult =
   | {
       ok: true;
-      /** The demo team's key, as the backend reports it. */
       teamKey: string;
-      /** Up to the backend's limit. Empty is a valid, successful answer. */
-      tasks: Task[];
-      /** True when the team has further open tickets beyond these. */
+      done: Task[];
+      inProgress: Task[];
+      upcoming: Task[];
+      openCount: number;
       hasMore: boolean;
     }
   | { ok: false; error: TasksErrorCode; message: string };
 
-/** Backend error codes we recognise and pass through unchanged. */
 const KNOWN_BACKEND_CODES = new Set([
   'server_not_configured',
   'upstream_unavailable',
@@ -77,12 +63,7 @@ function fail(error: TasksErrorCode, message: string): TasksResult {
   return { ok: false, error, message };
 }
 
-/**
- * Fetch the demo team's open tickets from the backend.
- *
- * Sends no parameters: the team is the server's to decide.
- * Never throws — every failure path returns `{ ok: false }` with a code.
- */
+
 export async function fetchStandupTasks(
   env: Record<string, string | undefined> = process.env,
 ): Promise<TasksResult> {
@@ -134,7 +115,10 @@ export async function fetchStandupTasks(
   return {
     ok: true,
     teamKey: parsed.data.teamKey,
-    tasks: parsed.data.tasks,
+    done: parsed.data.done,
+    inProgress: parsed.data.inProgress,
+    upcoming: parsed.data.upcoming,
+    openCount: parsed.data.openCount,
     hasMore: parsed.data.hasMore,
   };
 }

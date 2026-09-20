@@ -8,8 +8,14 @@ import {
   type Team,
   type WorkflowState,
 } from '@linear/sdk'
-import { TASK_STATUS_TYPES, type Task, type TaskStatusType } from '../../shared/tasks.js'
+import {
+  GROUP_SIZE,
+  TASK_STATUS_TYPES,
+  type Task,
+  type TaskStatusType,
+} from '../../shared/tasks.js'
 
+/** Open issues read per lookup, before they are grouped and trimmed. */
 const TASK_LIMIT = 25
 
 const CLOSED_STATE_TYPES = ['completed', 'canceled']
@@ -26,7 +32,19 @@ export type LinearErrorCode =
 export type LinearFailure = { ok: false; error: LinearErrorCode; message: string }
 
 export type LinearTasksResult =
-  | { ok: true; teamKey: string; teamName: string; tasks: Task[]; hasMore: boolean }
+  | {
+      ok: true
+      teamKey: string
+      teamName: string
+      /** Most recently completed first. */
+      done: Task[]
+      /** Started, most urgent first. */
+      inProgress: Task[]
+      /** Not started, most urgent first. */
+      upcoming: Task[]
+      openCount: number
+      hasMore: boolean
+    }
   | LinearFailure
 
 export type TaskUpdate = { identifier: string; status?: string; comment?: string }
@@ -42,6 +60,7 @@ class TaskError extends Error {
   }
 }
 
+/** Turn anything thrown below into a result. Anything unexpected is a bug: rethrow. */
 function toFailure(error: unknown): LinearFailure {
   if (error instanceof TaskError) {
     return { ok: false, error: error.code, message: error.message }
@@ -107,27 +126,55 @@ function toTask(issue: Issue, states: WorkflowState[]): Task {
   }
 }
 
-/** The configured team's most recently updated open issues. */
+/**
+ * Linear's priority is 0 none, 1 urgent … 4 low, so "none" sorts last rather
+ * than first.
+ */
+function byPriority(a: Task, b: Task): number {
+  const rank = (task: Task) => (task.priority === 0 ? 5 : task.priority)
+  return rank(a) - rank(b)
+}
+
+/**
+ * The stand-up at a glance: what was just finished, what is in progress, and
+ * what is up next. Each group holds at most `GROUP_SIZE` tickets.
+ */
 export async function fetchStandupTasks(
   env: Record<string, string | undefined> = process.env,
 ): Promise<LinearTasksResult> {
   try {
     const { team } = await openTeam(env)
-    const [issues, states] = await Promise.all([
+    const [open, completed, states] = await Promise.all([
       team.issues({
         first: TASK_LIMIT,
         orderBy: PaginationOrderBy.UpdatedAt,
         filter: { state: { type: { nin: CLOSED_STATE_TYPES } } },
       }),
+      team.issues({
+        first: GROUP_SIZE,
+        orderBy: PaginationOrderBy.UpdatedAt,
+        filter: { state: { type: { eq: 'completed' } } },
+      }),
       team.states(),
     ])
+
+    const openTasks = open.nodes.map((issue) => toTask(issue, states.nodes))
 
     return {
       ok: true,
       teamKey: team.key,
       teamName: team.name,
-      tasks: issues.nodes.map((issue) => toTask(issue, states.nodes)),
-      hasMore: issues.pageInfo.hasNextPage,
+      done: completed.nodes.map((issue) => toTask(issue, states.nodes)),
+      inProgress: openTasks
+        .filter((task) => task.statusType === 'started')
+        .sort(byPriority)
+        .slice(0, GROUP_SIZE),
+      upcoming: openTasks
+        .filter((task) => task.statusType !== 'started')
+        .sort(byPriority)
+        .slice(0, GROUP_SIZE),
+      openCount: openTasks.length,
+      hasMore: open.pageInfo.hasNextPage,
     }
   } catch (error) {
     return toFailure(error)
