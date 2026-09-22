@@ -1,23 +1,20 @@
-// Room-scoped LiveKit credentials; API secrets stay on the server.
-import { RoomAgentDispatch, RoomConfiguration } from '@livekit/protocol'
-import { AccessToken } from 'livekit-server-sdk'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { AccessToken, AgentDispatchClient } from 'livekit-server-sdk'
+import { browserContext } from './_lib/auth.js'
+import { rpc } from './_lib/db.js'
 import { json } from './_lib/http.js'
+import { authError, visitorHeaders } from './_lib/responses.js'
+import { openStandup } from './_lib/workflow-store.js'
 
-/** How long the participant token stays valid. It is only needed to join. */
 const TOKEN_TTL = '10m'
-
-/** Default dispatch name of the agent, matching `agentName` in sarjy-agent. */
+const BINDING_TTL_MINUTES = 60
 const DEFAULT_AGENT_NAME = 'sarjy-agent'
 
-type SessionRequest = {
-  /** Display name shown to other participants. Optional, never trusted for auth. */
-  participant_name?: string
-}
-
-/** LiveKit's standard token endpoint response. */
 type SessionResponse = {
   server_url: string
   participant_token: string
+  room_name: string
+  standup_id: string
 }
 
 class SessionConfigError extends Error {}
@@ -27,8 +24,8 @@ type Config = {
   apiKey: string
   apiSecret: string
   agentName: string
-  /** Empty targets the production deployment. */
   agentDeployment?: string
+  apiBase?: string
 }
 
 function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -52,40 +49,98 @@ function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
     apiSecret: apiSecret!,
     agentName: env.SARJY_AGENT_NAME || DEFAULT_AGENT_NAME,
     agentDeployment: env.LIVEKIT_AGENT_DEPLOYMENT || undefined,
+    apiBase: env.SARJY_PUBLIC_API_URL || undefined,
   }
 }
 
-/** Short, unique, and readable in the LiveKit dashboard. */
-function uniqueSuffix(): string {
-  return crypto.randomUUID().replaceAll('-', '').slice(0, 12)
+// LIVEKIT_URL is wss://, the dispatch client wants https://
+function httpUrl(wsUrl: string): string {
+  return wsUrl.replace(/^ws/, 'http')
 }
 
-/**
- * Mints credentials for one stand-up: a fresh room, a fresh identity, and a
- * token that can only join that room and dispatch only our agent.
- *
- * The room name and identity are generated here rather than taken from the
- * request, so a caller cannot join someone else's stand-up.
- */
-async function createStandupSession(
-  body: SessionRequest = {},
-  env: NodeJS.ProcessEnv = process.env,
-): Promise<SessionResponse> {
-  const config = readConfig(env)
+function uniqueSuffix(): string {
+  return randomUUID().replaceAll('-', '').slice(0, 12)
+}
+
+export async function POST(request: Request): Promise<Response> {
+  if (request.method !== 'POST') {
+    return json(405, { error: 'invalid_request', message: 'Use POST.' }, { Allow: 'POST' })
+  }
+
+  const context = await browserContext(request, { mutating: true })
+  if (!context.ok) return authError(context)
+  const headers = visitorHeaders(request, context.visitor)
+
+  // resuming a stand-up revokes its old binding, so two agents can't overlap
+  const standup = await openStandup(context.visitor.id)
+  if (!standup.ok) {
+    return json(503, { error: 'storage_unavailable', message: standup.message }, headers)
+  }
+
+  let config: Config
+  try {
+    config = readConfig()
+  } catch (error) {
+    console.error('[api/session] not configured:', (error as Error).message)
+    return json(
+      500,
+      {
+        error: 'server_not_configured',
+        message:
+          'The server is missing its LiveKit credentials. Check LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.',
+      },
+      headers,
+    )
+  }
 
   const roomName = `standup-${uniqueSuffix()}`
-  const participantIdentity = `dev-${uniqueSuffix()}`
-  const participantName =
-    typeof body.participant_name === 'string' && body.participant_name.trim() !== ''
-      ? body.participant_name.trim().slice(0, 64)
-      : 'Developer'
+  const bindingToken = randomBytes(32).toString('base64url')
+
+  const bound = await rpc<boolean>('sarjy_bind_room', {
+    p_visitor_id: context.visitor.id,
+    p_standup_id: standup.snapshot.standupId,
+    p_room_name: roomName,
+    p_token_hash: createHash('sha256').update(bindingToken).digest('hex'),
+    p_expires_at: new Date(Date.now() + BINDING_TTL_MINUTES * 60_000).toISOString(),
+  })
+  if (!bound.ok || !bound.data) {
+    return json(
+      503,
+      { error: 'storage_unavailable', message: 'Could not start a voice session. Try again.' },
+      headers,
+    )
+  }
+
+  try {
+    // the binding token goes in dispatch metadata, which only the worker sees.
+    // don't put it in the participant token, the browser can decode that.
+    const dispatcher = new AgentDispatchClient(
+      httpUrl(config.url),
+      config.apiKey,
+      config.apiSecret,
+    )
+    await dispatcher.createDispatch(roomName, config.agentName, {
+      metadata: JSON.stringify({
+        bindingToken,
+        room: roomName,
+        ...(config.apiBase ? { apiBase: config.apiBase } : {}),
+      }),
+      ...(config.agentDeployment ? { deployment: config.agentDeployment } : {}),
+    })
+  } catch (error) {
+    console.error('[api/session] dispatch failed:', error)
+    return json(
+      502,
+      { error: 'agent_unavailable', message: 'Sarjy could not be brought into the room.' },
+      headers,
+    )
+  }
 
   const token = new AccessToken(config.apiKey, config.apiSecret, {
-    identity: participantIdentity,
-    name: participantName,
+    identity: `visitor-${uniqueSuffix()}`,
+    name: 'Developer',
     ttl: TOKEN_TTL,
   })
-
   token.addGrant({
     roomJoin: true,
     room: roomName,
@@ -94,54 +149,12 @@ async function createStandupSession(
     canPublishData: true,
   })
 
-  // Explicit dispatch: sarjy-agent sets `agentName` on its ServerOptions, so it
-  // only joins rooms that ask for it by name.
-  // See https://docs.livekit.io/agents/server/agent-dispatch/
-  token.roomConfig = new RoomConfiguration({
-    agents: [
-      new RoomAgentDispatch({
-        agentName: config.agentName,
-        ...(config.agentDeployment ? { deployment: config.agentDeployment } : {}),
-      }),
-    ],
-  })
-
-  return {
+  const body: SessionResponse = {
     server_url: config.url,
     participant_token: await token.toJwt(),
-  }
-}
-
-export async function POST(request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return json(405, { error: 'invalid_request', message: 'Use POST.' }, { Allow: 'POST' })
+    room_name: roomName,
+    standup_id: standup.snapshot.standupId,
   }
 
-  let body: SessionRequest = {}
-  const raw = await request.text()
-  if (raw.trim() !== '') {
-    try {
-      body = JSON.parse(raw) as SessionRequest
-    } catch {
-      return json(400, { error: 'invalid_request', message: 'Body must be JSON.' })
-    }
-  }
-
-  try {
-    return json(201, await createStandupSession(body))
-  } catch (error) {
-    if (error instanceof SessionConfigError) {
-      console.error('[api/session] not configured:', error.message)
-      return json(500, {
-        error: 'server_not_configured',
-        message:
-          'The server is missing its LiveKit credentials. Check LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET.',
-      })
-    }
-    console.error('[api/session] failed to create session:', error)
-    return json(500, {
-      error: 'server_not_configured',
-      message: 'Could not create a stand-up session. Try again.',
-    })
-  }
+  return json(201, body, headers)
 }

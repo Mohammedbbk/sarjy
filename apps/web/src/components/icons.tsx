@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 
-/** Small inline stroke icons, sized by the `size` prop and coloured by `currentColor`. */
 type IconProps = { size?: number }
 
 function Svg({ size = 16, children }: IconProps & { children: ReactNode }) {

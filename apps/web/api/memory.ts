@@ -1,16 +1,12 @@
-import process from 'node:process'
-import { hasBearerToken } from './_lib/auth.js'
+import { agentContext } from './_lib/auth.js'
 import { json } from './_lib/http.js'
 import { getFacts, saveFact } from './_lib/memory-store.js'
+import { authError } from './_lib/responses.js'
 
 async function handleRequest(request: Request): Promise<Response> {
-  if (!hasBearerToken(request, process.env.MEMORY_API_TOKEN)) {
-    return json(401, {
-      ok: false,
-      error: 'unauthorized',
-      message: 'Memory access denied.',
-    })
-  }
+  const context = await agentContext(request)
+  if (!context.ok) return authError(context)
+
   if (request.method !== 'GET' && request.method !== 'POST') {
     return json(
       405,
@@ -28,7 +24,7 @@ async function handleRequest(request: Request): Promise<Response> {
 
   let result
   if (request.method === 'GET') {
-    result = await getFacts()
+    result = await getFacts(context.visitorId)
   } else {
     let body: unknown
     try {
@@ -55,17 +51,13 @@ async function handleRequest(request: Request): Promise<Response> {
       })
     }
     const input = body as Record<string, unknown>
-    result = await saveFact(input.key, input.value)
+    result = await saveFact(context.visitorId, input.key, input.value)
   }
-  return json(
-    result.ok ? 200 : result.error === 'invalid_input' ? 400 : 503,
-    result,
-  )
+  return json(result.ok ? 200 : result.error === 'invalid_input' ? 400 : 503, result)
 }
 
 export const GET = handleRequest
 export const POST = handleRequest
-// Keep authentication and no-store headers on unsupported methods too.
 export const PUT = handleRequest
 export const PATCH = handleRequest
 export const DELETE = handleRequest
