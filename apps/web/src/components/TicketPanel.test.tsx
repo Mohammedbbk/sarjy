@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TasksResponse } from '../../shared/tasks'
 import { TicketPanel } from './TicketPanel'
 
-/** The rail's four states, driven by what GET /api/tasks returns. */
 
 const TASK = {
   id: '9f1c2d3e-0000-4000-8000-aaaaaaaaaaaa',
@@ -26,13 +25,11 @@ function tasksResponse(overrides: Partial<TasksResponse> = {}): TasksResponse {
     done: [],
     inProgress: [TASK],
     upcoming: [],
-    openCount: 1,
-    hasMore: false,
+    fetchedAt: '2026-09-21T09:00:00.000Z',
     ...overrides,
   }
 }
 
-/** Mount the panel with its own cache, so tests never share query state. */
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
   return render(
@@ -42,7 +39,6 @@ function mount() {
   )
 }
 
-/** One queued response per call, so a retry can differ from the first attempt. */
 function mockFetchSequence(...steps: Response[]) {
   const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () => {
     const step = steps.shift()
@@ -81,24 +77,24 @@ describe('TicketPanel', () => {
     expect(screen.getByText('Wire the ticket rail to Linear')).toBeTruthy()
     expect(screen.getByText('In Progress')).toBeTruthy()
     expect(screen.getByText('1 open')).toBeTruthy()
-    expect(screen.queryByText(/more open tickets/)).toBeNull()
   })
 
-  it('flags that more tickets exist when hasMore is true', async () => {
-    mockFetchSequence(Response.json(tasksResponse({ hasMore: true })))
+  it('counts in-progress and upcoming tickets as open', async () => {
+    mockFetchSequence(
+      Response.json(tasksResponse({ upcoming: [{ ...TASK, id: 'b', identifier: 'SAR-5' }] })),
+    )
 
     mount()
 
-    expect(await screen.findByText('1+ open')).toBeTruthy()
-    expect(screen.getByText(/The team has more open tickets/)).toBeTruthy()
+    expect(await screen.findByText('2 open')).toBeTruthy()
   })
 
   it('distinguishes an empty list from a failure', async () => {
-    mockFetchSequence(Response.json(tasksResponse({ openCount: 0, inProgress: [] })))
+    mockFetchSequence(Response.json(tasksResponse({ inProgress: [] })))
 
     mount()
 
-    expect(await screen.findByText(/No tickets on this team yet/)).toBeTruthy()
+    expect(await screen.findByText(/no visible tickets/)).toBeTruthy()
     expect(screen.getByText('0 open')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull()
   })

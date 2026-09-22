@@ -2,7 +2,7 @@ import type { Task, TasksResponse, TaskStatusType } from '../../shared/tasks'
 import { useTasks, TasksRequestError } from '../lib/tasks'
 import { Button } from './Button'
 
-/** Colour means one thing here: started. Everything else is grey. */
+// only in-progress gets a colour
 const dotFor: Record<TaskStatusType, string> = {
   started: 'bg-accent',
   triage: 'border-[1.5px] border-muted',
@@ -14,15 +14,15 @@ const dotFor: Record<TaskStatusType, string> = {
 export function TicketPanel() {
   const { data, error, isPending, isFetching, refetch } = useTasks()
 
+  const openCount = data ? data.inProgress.length + data.upcoming.length : 0
+
   return (
     <section className="flex flex-col gap-4.5" aria-labelledby="ticket-panel-heading">
       <div className="flex items-baseline justify-between">
         <h2 id="ticket-panel-heading" className="text-[15px] font-semibold">
-          Linear tickets
+          Shared demo board
         </h2>
-        <span className="font-mono text-xs text-dim">
-          {data ? `${data.openCount}${data.hasMore ? '+' : ''} open` : '—'}
-        </span>
+        <span className="font-mono text-xs text-dim">{data ? `${openCount} open` : '—'}</span>
       </div>
 
       <div aria-live="polite" aria-busy={isPending}>
@@ -30,7 +30,7 @@ export function TicketPanel() {
           <TicketSkeleton />
         ) : error ? (
           <TicketError error={error} onRetry={() => void refetch()} isRetrying={isFetching} />
-        ) : data.openCount === 0 && data.done.length === 0 ? (
+        ) : openCount === 0 && data.done.length === 0 ? (
           <TicketsEmpty />
         ) : (
           <TicketGroups data={data} />
@@ -40,7 +40,6 @@ export function TicketPanel() {
   )
 }
 
-/** The three groups, in the order a stand-up walks through them. */
 function TicketGroups({ data }: { data: TasksResponse }) {
   const groups = [
     { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.', quiet: true },
@@ -70,11 +69,6 @@ function TicketGroups({ data }: { data: TasksResponse }) {
         </div>
       ))}
 
-      {data.hasMore && (
-        <p className="px-2.5 text-xs leading-relaxed text-dim">
-          The team has more open tickets than these.
-        </p>
-      )}
     </div>
   )
 }
@@ -115,7 +109,7 @@ function TicketSkeleton() {
 function TicketsEmpty() {
   return (
     <p className="px-2.5 text-[13.5px] leading-relaxed text-dim">
-      No tickets on this team yet. Nothing to review today.
+      The demo board has no visible tickets yet.
     </p>
   )
 }

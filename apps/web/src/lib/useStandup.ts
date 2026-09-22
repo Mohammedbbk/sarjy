@@ -23,8 +23,7 @@ type Attempt = {
   settled: Promise<void>
 }
 
-// Abort releases the SDK's agent wait. Clean up again after start settles:
-// microphone permission or connection work may finish after cancellation.
+
 function stop(attempt: Attempt | null, session: UseSessionReturn) {
   if (!attempt || attempt.controller.signal.aborted) return attempt?.settled
   attempt.controller.abort()

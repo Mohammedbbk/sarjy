@@ -1,7 +1,8 @@
+// user_id is the visitor id (it used to be 'demo-user' for everyone).
+// Old shared rows are left as-is and never copied to new visitors.
 import { createClient } from '@supabase/supabase-js'
 import process from 'node:process'
 
-const USER_ID = 'demo-user'
 const TIMEOUT_MS = 5_000
 export type Fact = { key: string; value: string; updated_at: string }
 export type MemoryFailure = {
@@ -59,14 +60,14 @@ const notConfigured = (): MemoryFailure => ({
   message: 'Memory storage is not configured.',
 })
 
-export async function getFacts(): Promise<Result<{ facts: Fact[] }>> {
+export async function getFacts(visitorId: string): Promise<Result<{ facts: Fact[] }>> {
   try {
     const db = client()
     if (!db) return notConfigured()
     const { data, error } = await db
       .from('memory_facts')
       .select('key,value,updated_at')
-      .eq('user_id', USER_ID)
+      .eq('user_id', visitorId)
       .order('key')
       .abortSignal(AbortSignal.timeout(TIMEOUT_MS))
     if (error || !data) return unavailable()
@@ -77,6 +78,7 @@ export async function getFacts(): Promise<Result<{ facts: Fact[] }>> {
 }
 
 export async function saveFact(
+  visitorId: string,
   key: unknown,
   value: unknown,
 ): Promise<Result<{ fact: Fact }>> {
@@ -95,7 +97,7 @@ export async function saveFact(
       .from('memory_facts')
       .upsert(
         {
-          user_id: USER_ID,
+          user_id: visitorId,
           ...input,
           updated_at: new Date().toISOString(),
         },

@@ -1,18 +1,9 @@
-/**
- * Serves the `api/` folder inside `vite dev`.
- *
- * This is not a proxy to another process: it loads the very same handler module
- * that Vercel deploys as a function and runs it in the dev server, so `pnpm dev`
- * alone gives you a working POST /api/session.
- *
- * Server-side env vars (LIVEKIT_API_KEY and friends) are read from `.env*` files
- * and put on `process.env` for the handler only. They are deliberately not
- * exposed through Vite's `define`, so they can never reach the client bundle.
- */
+// Runs the api/ handlers inside `vite dev` so no separate server is needed.
+// Server env vars go on process.env only, not through `define`, so they stay
+// out of the client bundle.
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadEnv, type Plugin, type ViteDevServer } from 'vite'
 
-/** Env vars the API needs. Everything else is left alone. */
 const SERVER_ENV_KEYS = [
   'LIVEKIT_URL',
   'LIVEKIT_API_KEY',
@@ -23,8 +14,8 @@ const SERVER_ENV_KEYS = [
   'LINEAR_TEAM_KEY',
   'SUPABASE_URL',
   'SUPABASE_SECRET_KEY',
-  'MEMORY_API_TOKEN',
-  'LINEAR_WRITES_ENABLED',
+  'SARJY_VISITOR_CAPACITY',
+  'SARJY_PUBLIC_API_URL',
 ]
 
 type WebHandler = (request: Request) => Response | Promise<Response>
@@ -35,7 +26,7 @@ export function devApi(): Plugin {
     apply: 'serve',
 
     config(_config, { mode }) {
-      // `''` as the prefix loads unprefixed vars too — that is the point here.
+      // '' prefix = load unprefixed vars too
       const env = loadEnv(mode, process.cwd(), '')
       for (const key of SERVER_ENV_KEYS) {
         if (process.env[key] === undefined && env[key] !== undefined) {
@@ -90,7 +81,7 @@ async function handle(
   await writeResponse(res, await handler(await toWebRequest(req)))
 }
 
-/** `/api/session?x=1` -> `session`. `_`-prefixed files are private, as on Vercel. */
+// /api/session?x=1 -> session. _files are private, same as vercel.
 function apiRoute(url: string | undefined): string | null {
   if (!url) return null
   const path = url.split('?')[0]
@@ -102,7 +93,7 @@ function pickHandler(module: Record<string, unknown>, method: string): WebHandle
   const byMethod = module[method.toUpperCase()]
   if (typeof byMethod === 'function') return byMethod as WebHandler
 
-  // Also accept Vercel's `export default { fetch }` shape.
+  // vercel also allows `export default { fetch }`
   const fallback = module.default as { fetch?: unknown } | undefined
   if (fallback && typeof fallback.fetch === 'function') return fallback.fetch as WebHandler
 
@@ -142,7 +133,6 @@ async function writeResponse(res: ServerResponse, response: Response): Promise<v
   res.end(await response.text())
 }
 
-/** Vite reports a missing route file as a resolve failure. */
 function isModuleNotFound(error: unknown): boolean {
   const message = error instanceof Error ? error.message : ''
   return message.includes('Failed to load url') || message.includes('ENOENT')

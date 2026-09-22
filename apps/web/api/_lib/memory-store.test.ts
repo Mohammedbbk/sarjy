@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { getFacts, saveFact } from './memory-store.js'
 
+const VISITOR = '11111111-1111-4111-8111-111111111111'
+
 const { createClient, query } = vi.hoisted(() => {
   const query = {
     select: vi.fn(),
@@ -29,7 +31,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('reads shared facts with a bounded request', async () => {
+it('reads this visitor’s facts with a bounded request', async () => {
   const facts = [
     {
       key: 'favorite_color',
@@ -38,22 +40,22 @@ it('reads shared facts with a bounded request', async () => {
     },
   ]
   setup(facts)
-  expect(await getFacts()).toEqual({ ok: true, facts })
-  expect(query.eq).toHaveBeenCalledWith('user_id', 'demo-user')
+  expect(await getFacts(VISITOR)).toEqual({ ok: true, facts })
+  expect(query.eq).toHaveBeenCalledWith('user_id', VISITOR)
   expect(query.abortSignal).toHaveBeenCalledWith(expect.any(AbortSignal))
 })
 
 it('distinguishes an empty table from database errors', async () => {
   setup([])
-  expect(await getFacts()).toEqual({ ok: true, facts: [] })
+  expect(await getFacts(VISITOR)).toEqual({ ok: true, facts: [] })
   setup(null, { message: 'secret database detail' })
-  expect(await getFacts()).toEqual({
+  expect(await getFacts(VISITOR)).toEqual({
     ok: false,
     error: 'database_error',
     message: 'Memory storage is unavailable.',
   })
   query.abortSignal.mockRejectedValue(new Error('secret network detail'))
-  expect(await getFacts()).toMatchObject({ ok: false, error: 'database_error' })
+  expect(await getFacts(VISITOR)).toMatchObject({ ok: false, error: 'database_error' })
 })
 
 it('upserts corrections on the same identity and key with a fresh timestamp', async () => {
@@ -65,12 +67,12 @@ it('upserts corrections on the same identity and key with a fresh timestamp', as
   })
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-09-18T00:00:00Z'))
-  expect(await saveFact(' Favourite Colour ', ' purple ')).toMatchObject({
+  expect(await saveFact(VISITOR, ' Favourite Colour ', ' purple ')).toMatchObject({
     ok: true,
   })
   expect(query.upsert).toHaveBeenLastCalledWith(
     {
-      user_id: 'demo-user',
+      user_id: VISITOR,
       key: 'favorite_color',
       value: 'purple',
       updated_at: '2026-09-18T00:00:00.000Z',
@@ -78,10 +80,10 @@ it('upserts corrections on the same identity and key with a fresh timestamp', as
     { onConflict: 'user_id,key' },
   )
   vi.setSystemTime(new Date('2026-09-19T00:00:00Z'))
-  await saveFact('favoriteColor', 'green')
+  await saveFact(VISITOR, 'favoriteColor', 'green')
   expect(query.upsert).toHaveBeenLastCalledWith(
     {
-      user_id: 'demo-user',
+      user_id: VISITOR,
       key: 'favorite_color',
       value: 'green',
       updated_at: '2026-09-19T00:00:00.000Z',
@@ -99,7 +101,7 @@ it.each([
   [null, 'x'],
 ])('rejects invalid input before database access', async (key, value) => {
   setup(null)
-  expect(await saveFact(key, value)).toMatchObject({
+  expect(await saveFact(VISITOR, key, value)).toMatchObject({
     ok: false,
     error: 'invalid_input',
   })
@@ -110,10 +112,10 @@ it('reports missing config and failed writes', async () => {
   setup(null, { message: 'denied' })
   query.abortSignal.mockReturnValue(query)
   query.single.mockResolvedValue({ data: null, error: { message: 'denied' } })
-  expect(await saveFact('favorite_color', 'purple')).toMatchObject({
+  expect(await saveFact(VISITOR, 'favorite_color', 'purple')).toMatchObject({
     ok: false,
     error: 'database_error',
   })
   vi.stubEnv('SUPABASE_SECRET_KEY', '')
-  expect(await getFacts()).toMatchObject({ ok: false, error: 'not_configured' })
+  expect(await getFacts(VISITOR)).toMatchObject({ ok: false, error: 'not_configured' })
 })

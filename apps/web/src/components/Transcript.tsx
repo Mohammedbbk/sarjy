@@ -2,9 +2,7 @@ import type { Turn } from '../lib/transcript'
 import { Eyebrow } from './Layout'
 
 type Props = {
-  /** Live transcriptions from LiveKit, oldest first. */
   turns: Turn[]
-  /** Shown before anything has been said. */
   placeholder?: string
 }
 
@@ -22,7 +20,6 @@ export function Transcript({ turns, placeholder }: Props) {
             <Eyebrow>{turn.speaker === 'sarjy' ? 'Sarjy' : 'You'}</Eyebrow>
             <p
               className={`text-[15px] leading-relaxed ${isLast ? 'text-text' : 'text-muted'} ${
-                // Interim speech-to-text is still being revised as you talk.
                 turn.interim ? 'italic opacity-70' : ''
               }`}
             >

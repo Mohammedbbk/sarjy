@@ -47,6 +47,10 @@ console-recordings/
 # Local work logs kept out of version control
 logging/
 
+# Local planning notes
+plans/
+ASSIGNMENT_PLAN.md
+
 docs/
 
 # Environment files: every variant is secret-bearing except the checked-in

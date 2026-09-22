@@ -8,7 +8,6 @@ const base =
   'disabled:cursor-not-allowed disabled:opacity-45'
 
 const variants: Record<Variant, string> = {
-  // Off-white on black, never a coloured fill: colour is reserved for "active".
   primary: 'bg-text text-bg hover:bg-text/90',
   secondary: 'border border-line-strong text-text hover:bg-raised',
   danger: 'border border-red/35 text-red hover:bg-red/10',
@@ -17,7 +16,6 @@ const variants: Record<Variant, string> = {
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant
-  /** `lg` is the call-to-action size used for Start / Start another. */
   size?: 'sm' | 'md' | 'lg'
   children: ReactNode
 }

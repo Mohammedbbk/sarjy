@@ -1,9 +1,5 @@
 import type { ReactNode } from 'react'
 
-/**
- * Product header: wordmark, the demo badge, and one (i) that explains the demo
- * on hover or focus. The explanation used to be a permanent footer bar.
- */
 export function Header() {
   return (
     <header className="border-b border-line">
@@ -33,7 +29,6 @@ export function Header() {
   )
 }
 
-/** The demo caveats, out of the way until someone asks for them. */
 function DemoInfo() {
   return (
     <span className="group relative inline-flex">
@@ -64,15 +59,13 @@ function DemoInfo() {
         role="tooltip"
         className="pointer-events-none absolute top-[26px] left-0 z-20 w-[270px] rounded-lg border border-line-strong bg-raised px-3.5 py-3 text-[12.5px] leading-relaxed text-muted opacity-0 shadow-[0_8px_20px_rgba(0,0,0,0.5)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
       >
-        Demo workspace — memory and Linear tickets are shared with everyone who opens this. The
-        voice call, transcript and tickets are live, and Sarjy only changes a ticket after you
-        confirm it out loud.
+        Linear tickets come from a shared, read-only demo board. Your stand-up state and remembered
+        preferences stay scoped to this browser for 30 days.
       </span>
     </span>
   )
 }
 
-/** Two-column workspace: conversation on the left, ticket rail on the right. */
 export function Workspace({ children, rail }: { children: ReactNode; rail: ReactNode }) {
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col lg:flex-row">
@@ -86,7 +79,6 @@ export function Workspace({ children, rail }: { children: ReactNode; rail: React
   )
 }
 
-/** Uppercase mono eyebrow used above panels and transcript turns. */
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <span className="font-mono text-[11px] font-medium tracking-[0.05em] text-dim uppercase">
