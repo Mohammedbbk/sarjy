@@ -5,6 +5,7 @@ import {
   CommandResponseSchema,
   ContextResponseSchema,
   MemoryResultSchema,
+  ProposalResponseSchema,
   SaveMemoryResponseSchema,
   type Failure,
   type MemoryResult,
@@ -16,7 +17,7 @@ import {
 export type { StandupContext, WorkflowSnapshot } from './api-schemas.ts';
 export type Binding = { apiBase: string; room: string; token: string };
 
-type Endpoint = '/api/agent' | '/api/memory';
+type Endpoint = '/api/agent' | '/api/memory' | '/api/agent-actions';
 type ReadResult<T> = { ok: true; body: T; httpOk: boolean } | {
   ok: false;
   kind: 'transport' | 'invalid_response';
@@ -159,6 +160,25 @@ export class WorkflowClient {
         : response.body;
     }
     return response.body;
+  }
+
+  async propose(input: {
+    entryId: string; issueId: string; kind: 'comment' | 'status'; body?: string | undefined; targetStatus?: string | undefined;
+  }): Promise<z.infer<typeof ProposalResponseSchema> | Failure> {
+    await this.commandQueue;
+    const body = JSON.stringify({ ...input, actionId: randomUUID() });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await this.request('/api/agent-actions', ProposalResponseSchema, { method: 'POST', body });
+      if (!response.ok) {
+        if (response.kind === 'transport' && attempt === 0) continue;
+        return fail('outcome_unknown', 'Could not confirm whether the proposal was saved. Check the review cards.');
+      }
+      if (response.httpOk && response.body.ok) return response.body;
+      return response.body.ok
+        ? fail('invalid_response', 'The proposal server returned an unexpected response.')
+        : response.body;
+    }
+    return fail('outcome_unknown', 'Could not confirm whether the proposal was saved.');
   }
 }
 

@@ -76,6 +76,7 @@ const TasksResult = z.discriminatedUnion('ok', [
     done: z.array(Task),
     inProgress: z.array(Task),
     upcoming: z.array(Task),
+    statusNames: z.array(z.string()),
   }),
   ApiFailure,
 ]);
@@ -90,6 +91,21 @@ const LastSummaryResult = z.discriminatedUnion('ok', [
   ApiFailure,
 ]);
 
+const Action = z.object({
+  id: z.string(),
+  issueIdentifier: z.string(),
+  kind: z.enum(['comment', 'status']),
+  status: z.enum(['proposed', 'applying', 'succeeded', 'failed', 'uncertain', 'invalidated']),
+  body: z.string().nullable(),
+  toStateName: z.string().nullable(),
+  result: z.string().nullable(),
+});
+
+const ActionsResult = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), actions: z.array(Action) }),
+  ApiFailure,
+]);
+
 export const ContextResponseSchema = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(true),
@@ -97,6 +113,7 @@ export const ContextResponseSchema = z.discriminatedUnion('ok', [
     tasks: TasksResult,
     memory: MemoryResultSchema,
     lastSummary: LastSummaryResult,
+    actions: ActionsResult,
   }),
   ApiFailure,
 ]);
@@ -108,6 +125,18 @@ export const CommandResponseSchema = z.discriminatedUnion('ok', [
 
 export const SaveMemoryResponseSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), fact: FactSchema }),
+  ApiFailure,
+]);
+
+export const ProposalResponseSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), action: z.object({
+    id: z.string(),
+    status: z.enum(['proposed', 'applying', 'succeeded', 'failed', 'uncertain', 'invalidated']),
+    kind: z.enum(['comment', 'status']),
+    issueIdentifier: z.string().optional(),
+    body: z.string().nullable().optional(),
+    toStateName: z.string().nullable().optional(),
+  }) }),
   ApiFailure,
 ]);
 

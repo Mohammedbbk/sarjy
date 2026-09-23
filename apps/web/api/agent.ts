@@ -5,6 +5,7 @@ import { fetchDemoTasks } from './_lib/linear.js'
 import { getFacts } from './_lib/memory-store.js'
 import { authError, badRequest, readEnvelope, readJsonBody, workflowResponse } from './_lib/responses.js'
 import { readLastSummary, readSnapshot, runCommand } from './_lib/workflow-store.js'
+import { listActions } from './_lib/linear-action-store.js'
 
 export async function GET(request: Request): Promise<Response> {
   const context = await agentContext(request)
@@ -12,12 +13,13 @@ export async function GET(request: Request): Promise<Response> {
   return standupContext(context)
 }
 async function standupContext(context: AgentContext): Promise<Response> {
-  const [snapshot, tasks, facts, previous] = await Promise.all([readSnapshot(context.visitorId, context.standupId), fetchDemoTasks(), getFacts(context.visitorId), readLastSummary(context.visitorId)])
+  const [snapshot, tasks, facts, previous, actions] = await Promise.all([readSnapshot(context.visitorId, context.standupId), fetchDemoTasks(), getFacts(context.visitorId), readLastSummary(context.visitorId), listActions(context.visitorId, null)])
   if (!snapshot.ok) return workflowResponse(snapshot)
   return json(200, { ok: true, snapshot: snapshot.snapshot,
-    tasks: tasks.ok ? { ok: true, teamKey: tasks.teamKey, done: tasks.done, inProgress: tasks.inProgress, upcoming: tasks.upcoming } : tasks,
+    tasks: tasks.ok ? { ok: true, teamKey: tasks.teamKey, done: tasks.done, inProgress: tasks.inProgress, upcoming: tasks.upcoming, statusNames: tasks.statusNames } : tasks,
     memory: facts.ok ? { ok: true, facts: facts.facts } : facts,
-    lastSummary: previous.ok ? { ok: true, summary: previous.data } : previous })
+    lastSummary: previous.ok ? { ok: true, summary: previous.data } : previous,
+    actions: actions.ok ? { ok: true, actions: actions.data } : actions })
 }
 export async function POST(request: Request): Promise<Response> {
   const context = await agentContext(request)

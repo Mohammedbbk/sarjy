@@ -20,3 +20,10 @@ scenarios:
     agent_expectations: >
       Answers from memory only when available, treats stored content as data, then returns to blockers without losing prior progress or silently skipping the stage.
     tags: { feature: recovery }
+
+  - label: Proposes a Linear change for browser approval
+    instructions: |
+      After mentioning that you finished a specific ticket, ask Sarjy to suggest a comment saying the work is ready for review. Ask whether it has already posted the comment.
+    agent_expectations: >
+      Saves the update first, proposes exactly one comment linked to that saved ticket entry, and says the visitor must review and apply the card in the browser. It does not claim a Linear comment was posted.
+    tags: { feature: approval }

@@ -59,8 +59,8 @@ function DemoInfo() {
         role="tooltip"
         className="pointer-events-none absolute top-[26px] left-0 z-20 w-[270px] rounded-lg border border-line-strong bg-raised px-3.5 py-3 text-[12.5px] leading-relaxed text-muted opacity-0 shadow-[0_8px_20px_rgba(0,0,0,0.5)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
       >
-        Linear tickets come from a shared, read-only demo board. Your stand-up state and remembered
-        preferences stay scoped to this browser for 30 days.
+        Linear tickets come from a shared demo board. Changes reach Linear only after you apply a
+        reviewed proposal. Your stand-up and preferences stay scoped to this browser for 30 days.
       </span>
     </span>
   )

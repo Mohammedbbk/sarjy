@@ -26,9 +26,10 @@ const snapshot = {
 const context = {
   ok: true,
   snapshot,
-  tasks: { ok: true, teamKey: 'SAR', done: [], inProgress: [], upcoming: [] },
+  tasks: { ok: true, teamKey: 'SAR', done: [], inProgress: [], upcoming: [], statusNames: ['Todo', 'Done'] },
   memory: { ok: true, facts: [] },
   lastSummary: { ok: true, summary: null },
+  actions: { ok: true, actions: [] },
 };
 
 const json = (body: unknown, status = 200) =>
@@ -47,12 +48,14 @@ describe('room-bound workflow client', () => {
     expect(() => bindingFromMetadata('{}', binding.apiBase)).toThrow();
   });
 
-  it('rejects a malformed task or memory response rather than treating it as empty', async () => {
+  it('rejects a malformed task, memory, or action response rather than treating it as empty', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json({ ...context, tasks: { ok: true, done: [] } }))
-      .mockResolvedValueOnce(json({ ...context, memory: { ok: true, facts: 'none' } }));
+      .mockResolvedValueOnce(json({ ...context, memory: { ok: true, facts: 'none' } }))
+      .mockResolvedValueOnce(json({ ...context, actions: { ok: true, actions: 'none' } }));
     const client = new WorkflowClient(binding);
 
+    expect(await client.context()).toMatchObject({ ok: false, error: 'invalid_response' });
     expect(await client.context()).toMatchObject({ ok: false, error: 'invalid_response' });
     expect(await client.context()).toMatchObject({ ok: false, error: 'invalid_response' });
   });
@@ -157,5 +160,37 @@ describe('room-bound workflow client', () => {
       ok: false,
       error: 'outcome_unknown',
     });
+  });
+
+  it('submits one proposal with a stable action id across a lost response', async () => {
+    const action = { id: '11111111-1111-4111-8111-111111111111', status: 'proposed', kind: 'comment', body: 'Shipped referral' };
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('connection lost'))
+      .mockResolvedValueOnce(json({ ok: true, action }));
+    const client = new WorkflowClient(binding);
+
+    expect((await client.propose({ entryId: 'entry-1', issueId: 'issue-1', kind: 'comment', body: 'Shipped referral' })).ok).toBe(true);
+    expect(fetchMock.mock.calls[0]![0].toString()).toContain('/api/agent-actions');
+    const first = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual(first);
+    expect(first.actionId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('waits for an in-flight saved update before sending its proposal', async () => {
+    let finishSave!: (response: Response) => void;
+    const delayedSave = new Promise<Response>((resolve) => { finishSave = resolve; });
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(context))
+      .mockReturnValueOnce(delayedSave)
+      .mockResolvedValueOnce(json({ ok: true, action: { id: 'a', status: 'proposed', kind: 'comment', body: 'Ready' } }));
+    const client = new WorkflowClient(binding);
+    await client.context();
+    const saving = client.command({ type: 'capture', section: 'review', entries: [{ text: 'Ready' }] });
+    const proposing = client.propose({ entryId: 'entry-1', issueId: 'issue-1', kind: 'comment', body: 'Ready' });
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finishSave(json({ ok: true, snapshot: { ...snapshot, revision: 3 } }));
+    await Promise.all([saving, proposing]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
