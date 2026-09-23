@@ -10,6 +10,10 @@ Endpoints:
 - `GET|POST /api/agent`: room-bound context and durable commands.
 - `GET|POST /api/memory`: room-bound visitor facts.
 - `POST /api/workflow`: browser start, snapshot, command, and finish operations.
+- `POST /api/agent-actions`: room-bound proposal creation; this route never writes to Linear.
+- `GET|POST /api/actions`: visitor-scoped proposal list, approval, and outcome check. Approval is the only Linear write path.
+
+Each proposal is one comment or one status change. A correction to its source update permanently makes an unapproved proposal outdated. Recent action receipts remain visible across stand-ups. The demo board is shared, so approved changes are visible to other visitors. Use fictional tickets in a dedicated Linear team.
 
 Don't prefix server env vars with `VITE_`, Vite ships those to the browser.
 

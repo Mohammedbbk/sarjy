@@ -7,15 +7,18 @@ import { ConnectingNotice, ConnectionNotice } from '../components/ConnectionNoti
 import { Workspace } from '../components/Layout'
 import { TicketPanel } from '../components/TicketPanel'
 import { WorkflowPanel } from '../components/WorkflowPanel'
+import { ProposalPanel } from '../components/ProposalPanel'
 import { Transcript } from '../components/Transcript'
 import { CloseIcon, MicIcon, MicOffIcon } from '../components/icons'
 import type { useStandup } from '../lib/useStandup'
+import type { useActions } from '../lib/actions'
 import { describeStartError, type StandupError } from '../lib/session'
 import type { WorkflowSnapshot } from '../../shared/workflow'
 
 type Props = {
   standup: ReturnType<typeof useStandup>
   snapshot?: WorkflowSnapshot
+  actions?: ReturnType<typeof useActions>
 }
 
 function connectingLabel(agentState: string): string {
@@ -31,7 +34,7 @@ function connectingLabel(agentState: string): string {
   }
 }
 
-export function LiveView({ standup, snapshot }: Props) {
+export function LiveView({ standup, snapshot, actions }: Props) {
   const { state, turns, start, end, reset } = standup
   const session = useSessionContext()
   const { state: agentState, canListen } = useAgent(session)
@@ -66,7 +69,7 @@ export function LiveView({ standup, snapshot }: Props) {
     connection === ConnectionState.SignalReconnecting
 
   return (
-    <Workspace rail={<div className="flex flex-col gap-4">{snapshot && <WorkflowPanel snapshot={snapshot} />}<TicketPanel /></div>}>
+    <Workspace rail={<div className="flex flex-col gap-4">{snapshot && <WorkflowPanel snapshot={snapshot} />}{actions && <ProposalPanel actions={actions.actions} pendingId={actions.pendingId} error={actions.actionError ?? actions.loadError} onApply={actions.apply} onCheck={actions.check} />}<TicketPanel /></div>}>
       <AudioStatus
         agentState={agentState}
         microphoneEnabled={isMicrophoneEnabled}

@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs'
 import { Client } from 'pg'
 import { fileURLToPath } from 'node:url'
 
-const MIGRATION = fileURLToPath(
-  new URL('../../../../../supabase/migrations/202609210001_visitor_workflow.sql', import.meta.url),
-)
+const MIGRATIONS = [
+  '../../../../../supabase/migrations/202609210001_visitor_workflow.sql',
+  '../../../../../supabase/migrations/202609220001_linear_actions.sql',
+].map((path) => fileURLToPath(new URL(path, import.meta.url)))
 
 export const DATABASE_URL = process.env.SARJY_TEST_DATABASE_URL ?? ''
 
@@ -39,7 +40,7 @@ export async function unlockSchema(client: Client): Promise<void> {
 }
 
 /**
- * Rebuild the schema from the migration file, so tests read the shipped SQL.
+ * Rebuild the schema from the shipped migrations.
  *
  * The three Supabase roles are created first when they are missing, so the
  * migration's conditional privilege branches actually execute here. Without them
@@ -58,7 +59,7 @@ export async function resetSchema(client: Client): Promise<void> {
   }
   await client.query('drop schema if exists public cascade')
   await client.query('create schema public')
-  await client.query(readFileSync(MIGRATION, 'utf8'))
+  for (const migration of MIGRATIONS) await client.query(readFileSync(migration, 'utf8'))
 }
 
 /** The roles Supabase provides, which the migration's privilege block targets. */

@@ -28,7 +28,7 @@ async function openTeam(env: Record<string, string | undefined>) {
   const teams = await client.teams({ filter: { key: { eqIgnoreCase: teamKey } } })
   const team = teams.nodes[0]
   if (!team) throw new TaskError('team_not_found', `No Linear team uses key ${teamKey}.`)
-  return team
+  return { client, team }
 }
 
 function toTask(issue: Issue, states: WorkflowState[]): Task {
@@ -40,12 +40,11 @@ function toTask(issue: Issue, states: WorkflowState[]): Task {
 }
 
 const byPriority = (a: Task, b: Task) => (a.priority || 5) - (b.priority || 5)
-export type DemoTasksResult = ({ ok: true; teamKey: string; teamName: string; done: Task[]; inProgress: Task[]; upcoming: Task[]; fetchedAt: string }) | LinearFailure
+export type DemoTasksResult = ({ ok: true; teamKey: string; teamName: string; done: Task[]; inProgress: Task[]; upcoming: Task[]; statusNames: string[]; fetchedAt: string }) | LinearFailure
 
-// read-only, nothing writes to linear
 export async function fetchDemoTasks(env: Record<string, string | undefined> = process.env): Promise<DemoTasksResult> {
   try {
-    const team = await openTeam(env)
+    const { team } = await openTeam(env)
     const [issues, states] = await Promise.all([
       team.issues({ first: READ_LIMIT, orderBy: PaginationOrderBy.UpdatedAt }), team.states(),
     ])
@@ -55,7 +54,53 @@ export async function fetchDemoTasks(env: Record<string, string | undefined> = p
       done: tasks.filter((task) => task.statusType === 'completed').slice(0, GROUP_SIZE),
       inProgress: tasks.filter((task) => task.statusType === 'started').sort(byPriority).slice(0, GROUP_SIZE),
       upcoming: tasks.filter((task) => !['started', 'completed'].includes(task.statusType)).sort(byPriority).slice(0, GROUP_SIZE),
+      statusNames: states.nodes.map((state) => state.name),
       fetchedAt: new Date().toISOString(),
     }
   } catch (error) { return failure(error) }
+}
+
+export type WritableIssue = {
+  id: string
+  identifier: string
+  title: string
+  url: string
+  stateId: string
+  stateName: string
+  states: { id: string; name: string }[]
+}
+
+export class LinearTargetError extends Error {}
+
+export type LinearWriteGateway = {
+  issue(id: string): Promise<WritableIssue>
+  comment(id: string): Promise<{ issueId: string; body: string } | null>
+  createComment(id: string, issueId: string, body: string): Promise<boolean>
+  updateStatus(issueId: string, stateId: string): Promise<boolean>
+}
+
+// Every write checks the issue's actual team; the small board listing is not an allowlist.
+export const linearWriteGateway: LinearWriteGateway = {
+  async issue(id) {
+    const { client, team } = await openTeam(process.env)
+    const issue = await client.issue(id)
+    if (!issue || issue.teamId !== team.id) throw new LinearTargetError('That ticket is not on the Sarjy demo board.')
+    const states = (await team.states()).nodes.map(({ id, name }) => ({ id, name }))
+    const state = states.find((item) => item.id === issue.stateId)
+    if (!state) throw new LinearTargetError('The ticket has an unknown workflow state.')
+    return { id: issue.id, identifier: issue.identifier, title: issue.title, url: issue.url,
+      stateId: state.id, stateName: state.name, states }
+  },
+  async comment(id) {
+    const comment = await new LinearClient({ apiKey: process.env.LINEAR_API_KEY }).comment({ id })
+    return comment ? { issueId: comment.issueId ?? '', body: comment.body ?? '' } : null
+  },
+  async createComment(id, issueId, body) {
+    const payload = await new LinearClient({ apiKey: process.env.LINEAR_API_KEY }).createComment({ id, issueId, body })
+    return payload.success
+  },
+  async updateStatus(issueId, stateId) {
+    const payload = await new LinearClient({ apiKey: process.env.LINEAR_API_KEY }).updateIssue(issueId, { stateId })
+    return payload.success
+  },
 }

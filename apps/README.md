@@ -1,10 +1,10 @@
-  # Sarjy applications
+# Sarjy applications
 
 Sarjy is a voice stand-up assistant with a durable four-step workflow: progress, blockers, today, and confirmation.
 
 | Path | Purpose |
 |---|---|
-| `web` | React interface plus Vercel API handlers for identity, workflow, memory, LiveKit sessions, and read-only Linear tasks |
+| `web` | React interface plus Vercel API handlers for identity, workflow, memory, LiveKit sessions, and approved Linear changes |
 | `sarjy-agent` | LiveKit voice worker that turns conversation into validated workflow commands |
 
 ## Request flow
@@ -13,7 +13,7 @@ Sarjy is a voice stand-up assistant with a durable four-step workflow: progress,
 2. `POST /api/session` binds that stand-up to a unique LiveKit room. The participant token goes to the browser; a separate binding secret goes to the worker in server-side dispatch metadata.
 3. The worker reads `/api/agent`, saves revisioned commands there, and accesses visitor memory through `/api/memory` with the same room binding.
 4. The browser polls the durable snapshot while the call is active and explicitly finishes the stand-up after reviewing the recap.
-5. `/api/tasks` reads a small shared Linear demo board. No endpoint can write to Linear.
+5. `/api/tasks` reads a small shared Linear demo board. The worker can propose a comment or status change through `/api/agent-actions`; only the visitor's browser can confirm it through `/api/actions`. The resulting receipt is saved and shown on the proposal card.
 
 ## Local setup
 

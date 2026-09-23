@@ -3,9 +3,11 @@ import { Eyebrow, Workspace } from '../components/Layout'
 import { TicketPanel } from '../components/TicketPanel'
 import { MicIcon } from '../components/icons'
 import { WorkflowPanel } from '../components/WorkflowPanel'
+import { ProposalPanel } from '../components/ProposalPanel'
+import type { useActions } from '../lib/actions'
 import type { StandupSummary, WorkflowSnapshot } from '../../shared/workflow'
 
-export function IdleView({ onStart, snapshot, resumed = false, lastSummary = null }: { onStart: () => void; snapshot?: WorkflowSnapshot; resumed?: boolean; lastSummary?: StandupSummary | null }) {
+export function IdleView({ onStart, snapshot, resumed = false, lastSummary = null, actions }: { onStart: () => void; snapshot?: WorkflowSnapshot; resumed?: boolean; lastSummary?: StandupSummary | null; actions: ReturnType<typeof useActions> }) {
   return (
     <Workspace rail={<TicketPanel />}>
       <div className="flex flex-col gap-3">
@@ -37,6 +39,7 @@ export function IdleView({ onStart, snapshot, resumed = false, lastSummary = nul
       </div>
 
       {snapshot && resumed && snapshot.revision > 0 && <WorkflowPanel snapshot={snapshot} />}
+      <ProposalPanel actions={actions.actions} pendingId={actions.pendingId} error={actions.actionError ?? actions.loadError} onApply={actions.apply} onCheck={actions.check} />
       {lastSummary && <section className="rounded-xl border border-line p-4"><Eyebrow>Since last time</Eyebrow><p className="mt-2 text-sm text-soft">{lastSummary.commitments.map((item) => item.text).join(' · ') || 'No commitment was saved.'}</p></section>}
 
       <div className="flex flex-col gap-2.5">

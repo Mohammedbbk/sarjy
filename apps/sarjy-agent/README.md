@@ -2,7 +2,7 @@
 
 This LiveKit worker runs the spoken stand-up. The web app creates a room and sends a short-lived binding token to this worker through server-side dispatch metadata. The token lets the worker read and save only the visitor's current stand-up. The browser receives a separate participant token.
 
-The conversation has four stages: progress, blockers, today, and confirmation. The worker uses structured tools to save each update, revise corrections, clarify ambiguous ticket references, and advance stages. The web backend validates and persists every command. The visitor finishes the recap in the browser. Linear tickets are a shared read-only demo board; personal facts are stored per visitor.
+The conversation has four stages: progress, blockers, today, and confirmation. The worker uses structured tools to save each update, revise corrections, clarify ambiguous ticket references, and advance stages. It can propose a Linear comment or status change for a saved ticket update, but only the visitor can apply each proposal in the browser. The web backend validates and persists every command and records the Linear outcome. Personal facts are stored per visitor.
 
 ## Local development
 
@@ -21,11 +21,11 @@ pnpm typecheck
 pnpm lint
 ```
 
-`src/workflow.test.ts` checks the room binding, response validation, revision conflicts, and retries. `scenarios.yaml` describes spoken acceptance cases for corrections, ambiguous tickets, and digressions. A live call is still needed to validate the whole speech experience.
+`src/workflow.test.ts` checks the room binding, response validation, revision conflicts, and retries, including a proposal request. `scenarios.yaml` describes spoken acceptance cases. A live call is still needed to validate the whole speech experience.
 
 ## API client convention
 
-Keep response schemas in `src/api-schemas.ts` and validate every web API response before using it. Keep authentication, timeout, and JSON parsing in `WorkflowClient.request()`. Workflow methods own their own state rules: queue commands, send the cached revision, and reuse the same request ID when retrying one command. A stale response updates the cache but does not silently reapply the command. If the outcome cannot be confirmed, report `outcome_unknown` and read the saved state before another attempt.
+Keep response schemas in `src/api-schemas.ts` and validate every web API response before using it. Keep authentication, timeout, and JSON parsing in `WorkflowClient.request()`. Workflow methods own their own state rules: queue commands, wait for pending saves before proposing a Linear change, send the cached revision, and reuse the same request ID when retrying one command. A stale response updates the cache but does not silently reapply the command. If the outcome cannot be confirmed, report `outcome_unknown` and read the saved state before another attempt.
 
 ## Deployment
 

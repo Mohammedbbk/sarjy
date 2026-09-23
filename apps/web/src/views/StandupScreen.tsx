@@ -1,5 +1,6 @@
 import type { useStandup } from '../lib/useStandup'
 import type { useWorkflow } from '../lib/workflow'
+import { useActions } from '../lib/actions'
 import { FinishedView } from './FinishedView'
 import { IdleView } from './IdleView'
 import { LiveView } from './LiveView'
@@ -11,6 +12,7 @@ type Props = {
 }
 
 export function StandupScreen({ standup, workflow, onStart }: Props) {
+  const actions = useActions(workflow.snapshot?.standupId)
   if (workflow.isLoading) {
     return <main className="mx-auto w-full max-w-4xl p-8 text-muted">Loading your stand-up…</main>
   }
@@ -29,13 +31,14 @@ export function StandupScreen({ standup, workflow, onStart }: Props) {
           snapshot={workflow.snapshot}
           resumed={workflow.resumed}
           lastSummary={workflow.lastSummary}
+          actions={actions}
         />
       )
 
     case 'connecting':
     case 'active':
     case 'failed':
-      return <LiveView standup={standup} snapshot={workflow.snapshot} />
+      return <LiveView standup={standup} snapshot={workflow.snapshot} actions={actions} />
 
     case 'finished':
       return (
@@ -47,6 +50,7 @@ export function StandupScreen({ standup, workflow, onStart }: Props) {
           onFinish={workflow.finish}
           finishing={workflow.finishing}
           finishError={workflow.finishError}
+          actions={actions}
         />
       )
   }

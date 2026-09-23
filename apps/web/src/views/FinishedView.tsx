@@ -6,6 +6,8 @@ import { MicIcon } from '../components/icons'
 import { formatDuration, type Turn } from '../lib/transcript'
 import type { WorkflowSnapshot } from '../../shared/workflow'
 import { WorkflowPanel } from '../components/WorkflowPanel'
+import { ProposalPanel } from '../components/ProposalPanel'
+import type { useActions } from '../lib/actions'
 
 type Props = {
   turns: Turn[]
@@ -15,9 +17,10 @@ type Props = {
   onFinish?: () => void
   finishing?: boolean
   finishError?: string | null
+  actions: ReturnType<typeof useActions>
 }
 
-export function FinishedView({ turns, duration, onRestart, snapshot, onFinish, finishing = false, finishError = null }: Props) {
+export function FinishedView({ turns, duration, onRestart, snapshot, onFinish, finishing = false, finishError = null, actions }: Props) {
   const saved = snapshot?.stage === 'finished'
   return (
     <Workspace rail={<div className="flex flex-col gap-4">{snapshot && <WorkflowPanel snapshot={snapshot} />}<TicketPanel /></div>}>
@@ -39,6 +42,8 @@ export function FinishedView({ turns, duration, onRestart, snapshot, onFinish, f
       </section>
 
       {snapshot?.summary && <section className="rounded-xl border border-line bg-raised p-5"><h2 className="mb-3 text-[15px] font-bold">Saved recap</h2>{(['progress', 'blockers', 'commitments'] as const).map((key) => <div key={key} className="mb-3"><p className="font-mono text-[11px] tracking-wide text-dim uppercase">{key}</p><p className="text-sm text-soft">{snapshot.summary![key].map((item) => item.text).join(' · ') || 'None'}</p></div>)}</section>}
+      <ProposalPanel actions={actions.actions} pendingId={actions.pendingId} error={actions.actionError ?? actions.loadError} onApply={actions.apply} onCheck={actions.check} />
+      {!saved && actions.actions.some((action) => action.status === 'proposed') && <p className="text-xs text-muted">Finishing saves your recap. Unapplied Linear proposals stay unapplied.</p>}
       {finishError && <p className="text-sm text-red">{finishError}</p>}
 
       <div className="mt-auto flex flex-wrap gap-3 border-t border-line pt-6">
