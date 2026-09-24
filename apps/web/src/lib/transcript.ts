@@ -25,6 +25,16 @@ export function toTurns(messages: readonly ReceivedMessage[]): Turn[] {
       }
     })
     .filter((turn) => turn.text !== '')
+    .reduce<Turn[]>((turns, turn) => {
+      const previous = turns.at(-1)
+      if (turn.speaker === 'you' && previous?.speaker === 'you') {
+        previous.text += ` ${turn.text}`
+        previous.interim ||= turn.interim
+      } else {
+        turns.push(turn)
+      }
+      return turns
+    }, [])
 }
 
 export function formatDuration(milliseconds: number): string {

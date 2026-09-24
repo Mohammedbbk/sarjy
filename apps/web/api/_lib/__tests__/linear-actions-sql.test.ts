@@ -93,4 +93,41 @@ suite('Linear action SQL', () => {
     expect(next.snapshot.standupId).not.toBe(owner.standupId)
     expect(await rpc<{ id: string }[]>(db, 'sarjy_list_actions', [owner.visitorId, null])).toMatchObject([{ id: actionId }])
   })
+  it('creates from an unlinked saved entry, survives stage changes, and saves the receipt', async () => {
+    const owner = await open('create')
+    const unlinked = { ...doc, progress: [{ id: entryId, text: 'Magic link registration', issueId: null }] }
+    await rpc(db, 'sarjy_commit_command', [owner.visitorId, owner.standupId, 0, randomUUID(), 'review', unlinked])
+    const id = randomUUID()
+    const args = [owner.visitorId, owner.standupId, id, entryId, id, '', 'Registration', '', 'create', 'Use magic links', null, null, null, null, 'demo-team']
+    expect(await rpc(db, 'sarjy_propose_action', args)).toMatchObject({ status: 'ok', action: { kind: 'create', teamId: 'demo-team' } })
+    expect(await rpc(db, 'sarjy_propose_action', args)).toMatchObject({ status: 'replayed' })
+    await rpc(db, 'sarjy_commit_command', [owner.visitorId, owner.standupId, 1, randomUUID(), 'blockers', unlinked])
+    expect(await rpc(db, 'sarjy_claim_action', [owner.visitorId, id])).toMatchObject({ status: 'claimed' })
+    expect(await rpc(db, 'sarjy_claim_action', [owner.visitorId, id])).toMatchObject({ status: 'applying' })
+    expect(await rpc(db, 'sarjy_record_action_result', [id, 'succeeded', 'Created', 'SAR-5', 'https://linear.app/example/SAR-5']))
+      .toMatchObject({ status: 'succeeded', issueIdentifier: 'SAR-5', issueUrl: 'https://linear.app/example/SAR-5' })
+  })
+
+  it('invalidates a new ticket proposal if the saved request is corrected', async () => {
+    const owner = await open('create-corrected')
+    const unlinked = { ...doc, progress: [{ id: entryId, text: 'Registration', issueId: null }] }
+    await rpc(db, 'sarjy_commit_command', [owner.visitorId, owner.standupId, 0, randomUUID(), 'review', unlinked])
+    const id = randomUUID()
+    await rpc(db, 'sarjy_propose_action', [owner.visitorId, owner.standupId, id, entryId, id, '', 'Registration', '', 'create', 'Use magic links', null, null, null, null, 'team'])
+    const corrected = { ...unlinked, progress: [{ id: entryId, text: 'Use passwords instead', issueId: null }] }
+    await rpc(db, 'sarjy_commit_command', [owner.visitorId, owner.standupId, 1, randomUUID(), 'review', corrected])
+    expect(await rpc(db, 'sarjy_claim_action', [owner.visitorId, id])).toMatchObject({ status: 'invalidated' })
+  })
+
+  it('rejects creation from a linked entry and restricts the new RPC signatures', async () => {
+    const owner = await open('create-linked')
+    const id = randomUUID()
+    expect(await rpc(db, 'sarjy_propose_action', [owner.visitorId, owner.standupId, id, entryId, id, '', 'Registration', '', 'create', 'Use magic links', null, null, null, null, 'team']))
+      .toMatchObject({ status: 'invalid_entry' })
+    const { rows } = await db.query(`select
+      has_function_privilege('anon', 'public.sarjy_propose_action(uuid, uuid, uuid, uuid, text, text, text, text, text, text, text, text, text, text, text)', 'EXECUTE') as propose,
+      has_function_privilege('authenticated', 'public.sarjy_record_action_result(uuid, text, text, text, text)', 'EXECUTE') as receipt`)
+    expect(rows[0]).toEqual({ propose: false, receipt: false })
+  })
+
 })

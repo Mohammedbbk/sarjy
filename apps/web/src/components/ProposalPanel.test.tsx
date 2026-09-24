@@ -29,3 +29,15 @@ describe('Linear proposal review', () => {
     expect(screen.getByText('Outdated')).toBeTruthy()
   })
 })
+
+
+it('shows the new title and description before approval without a fake issue link', () => {
+  const apply = vi.fn()
+  render(<ProposalPanel actions={[{ ...action, kind: 'create', issueTitle: 'Magic link registration', body: 'Register and log in.', issueIdentifier: '', issueUrl: '' }]} onApply={apply} onCheck={vi.fn()} />)
+  expect(screen.getByText('New ticket · Magic link registration')).toBeTruthy()
+  expect(screen.getByText('Create ticket: “Register and log in.”')).toBeTruthy()
+  expect(screen.queryByRole('link')).toBeNull()
+  expect(apply).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Apply to Linear' }))
+  expect(apply).toHaveBeenCalledWith(action.id)
+})

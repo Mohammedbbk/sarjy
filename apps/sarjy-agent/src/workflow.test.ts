@@ -113,6 +113,48 @@ describe('room-bound workflow client', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[2]![1]?.body)).expectedRevision).toBe(3);
   });
 
+  it('waits for a pending save before refreshing the progress list', async () => {
+    let finishSave!: (response: Response) => void;
+    const delayedSave = new Promise<Response>((resolve) => { finishSave = resolve; });
+    const latest = { ...snapshot, revision: 3, doc: {
+      ...snapshot.doc,
+      progress: [{ id: 'entry-1', text: 'Fixed login', issueId: null }],
+    } };
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(context))
+      .mockReturnValueOnce(delayedSave)
+      .mockResolvedValueOnce(json({ ...context, snapshot: latest }));
+    const client = new WorkflowClient(binding);
+    await client.context();
+    const saving = client.command({ type: 'capture', section: 'review', entries: [{ text: 'Fixed login' }] });
+    const reading = client.context();
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finishSave(json({ ok: true, snapshot: latest }));
+    await saving;
+    expect(await reading).toMatchObject({ ok: true, snapshot: { revision: 3, doc: { progress: [{ text: 'Fixed login' }] } } });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not let a delayed refresh overwrite a newer save revision', async () => {
+    let finishRead!: (response: Response) => void;
+    const delayedRead = new Promise<Response>((resolve) => { finishRead = resolve; });
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json(context))
+      .mockReturnValueOnce(delayedRead)
+      .mockResolvedValueOnce(json({ ok: true, snapshot: { ...snapshot, revision: 3 } }));
+    const client = new WorkflowClient(binding);
+    await client.context();
+    const reading = client.context();
+    const saving = client.command({ type: 'declare_none', section: 'blockers' });
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finishRead(json(context));
+    await reading;
+    expect(await saving).toMatchObject({ ok: true, snapshot: { revision: 3 } });
+    expect(JSON.parse(String(fetchMock.mock.calls[2]![1]?.body)).expectedRevision).toBe(2);
+  });
+
   it('reports an unknown outcome after two lost responses', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(json(context))
@@ -192,5 +234,20 @@ describe('room-bound workflow client', () => {
     finishSave(json({ ok: true, snapshot: { ...snapshot, revision: 3 } }));
     await Promise.all([saving, proposing]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+
+describe('new ticket proposals', () => {
+  it('sends a create proposal without inventing an existing ticket id', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({
+      ok: true, action: { id: 'proposal', kind: 'create', status: 'proposed' },
+    }));
+    const client = new WorkflowClient(binding);
+    expect(await client.propose({ entryId: 'entry', kind: 'create', title: 'Magic link registration', body: 'Register and log in using a magic link.' }))
+      .toMatchObject({ ok: true, action: { kind: 'create', status: 'proposed' } });
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string);
+    expect(body).toMatchObject({ kind: 'create', title: 'Magic link registration' });
+    expect(body.issueId).toBeUndefined();
   });
 });

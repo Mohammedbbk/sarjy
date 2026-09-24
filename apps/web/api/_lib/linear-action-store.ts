@@ -9,6 +9,7 @@ type ProposalToSave = {
   actionId: string
   entryId: string
   issueId: string
+  teamId: string | null
   issueIdentifier: string
   issueTitle: string
   issueUrl: string
@@ -35,6 +36,7 @@ export function saveProposal(input: ProposalToSave): Promise<DbResult<ProposalRo
     p_action_id: input.actionId,
     p_entry_id: input.entryId,
     p_issue_id: input.issueId,
+    p_team_id: input.teamId,
     p_issue_identifier: input.issueIdentifier,
     p_issue_title: input.issueTitle,
     p_issue_url: input.issueUrl,
@@ -51,6 +53,6 @@ export function claimAction(visitorId: string, actionId: string): Promise<DbResu
   return rpc('sarjy_claim_action', { p_visitor_id: visitorId, p_action_id: actionId })
 }
 
-export function recordAction(actionId: string, status: 'succeeded' | 'failed' | 'uncertain', result: string): Promise<DbResult<LinearAction | null>> {
-  return rpc('sarjy_record_action_result', { p_action_id: actionId, p_status: status, p_result: result })
+export function recordAction(actionId: string, status: 'succeeded' | 'failed' | 'uncertain', result: string, receipt?: { identifier: string; url: string }): Promise<DbResult<LinearAction | null>> {
+  return rpc('sarjy_record_action_result', { p_action_id: actionId, p_status: status, p_result: result, p_issue_identifier: receipt?.identifier ?? null, p_issue_url: receipt?.url ?? null })
 }

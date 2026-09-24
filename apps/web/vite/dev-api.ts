@@ -33,6 +33,10 @@ export function devApi(): Plugin {
           process.env[key] = env[key]
         }
       }
+      process.env.SARJY_AGENT_NAME ||= 'sarjy-agent-local'
+      if (process.env.SARJY_AGENT_NAME === 'sarjy-agent-local') {
+        process.env.SARJY_PUBLIC_API_URL ||= 'http://localhost:5180'
+      }
     },
 
     configureServer(server: ViteDevServer) {

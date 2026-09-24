@@ -2,7 +2,7 @@ import { ServerOptions, cli, defineAgent, inference, voice } from '@livekit/agen
 import { audioEnhancement } from '@livekit/plugins-ai-coustics';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
-import { createInitializedAgent } from './agent.ts';
+import { createInitializedAgent, initialReplyInstructions } from './agent.ts';
 import { bindingFromMetadata, WorkflowClient } from './workflow.ts';
 
 dotenv.config({ path: '.env.local' });
@@ -25,6 +25,7 @@ export default defineAgent({
       turnHandling: {
         // https://docs.livekit.io/agents/logic/turns/turn-detector/
         turnDetection: new inference.TurnDetector(),
+        endpointing: { minDelay: 400, maxDelay: 2500 },
         // keeps talking through "mhm" / "right"
         interruption: { mode: 'adaptive' },
         preemptiveGeneration: { enabled: true },
@@ -45,8 +46,7 @@ export default defineAgent({
     await ctx.connect();
 
     session.generateReply({
-      instructions:
-        'Greet the user briefly. Resume from the saved stage and ask the next unanswered stand-up question.',
+      instructions: initialReplyInstructions(),
     });
   },
 });
@@ -54,6 +54,6 @@ export default defineAgent({
 cli.runApp(
   new ServerOptions({
     agent: fileURLToPath(import.meta.url),
-    agentName: 'sarjy-agent',
+    agentName: process.env.SARJY_AGENT_NAME || (process.argv.includes('dev') ? 'sarjy-agent-local' : 'sarjy-agent'),
   }),
 );

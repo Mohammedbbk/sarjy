@@ -54,8 +54,9 @@ export function useTasks() {
   return useQuery({
     queryKey: TASKS_QUERY_KEY,
     queryFn: fetchTasks,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchInterval: 30_000,
     retry: (failureCount, error) =>
       error instanceof TasksRequestError &&
       error.code !== 'server_not_configured' &&

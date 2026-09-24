@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 const MIGRATIONS = [
   '../../../../../supabase/migrations/202609210001_visitor_workflow.sql',
   '../../../../../supabase/migrations/202609220001_linear_actions.sql',
+  '../../../../../supabase/migrations/202609230001_create_linear_tickets.sql',
 ].map((path) => fileURLToPath(new URL(path, import.meta.url)))
 
 export const DATABASE_URL = process.env.SARJY_TEST_DATABASE_URL ?? ''

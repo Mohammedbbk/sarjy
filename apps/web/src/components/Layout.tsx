@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 export function Header() {
   return (
     <header className="border-b border-line">
-      <div className="mx-auto flex h-16 max-w-[1280px] items-center gap-3 px-5 sm:px-8">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-5 sm:px-8">
         <svg
           width="22"
           height="22"
@@ -57,7 +57,7 @@ function DemoInfo() {
       <span
         id="demo-info"
         role="tooltip"
-        className="pointer-events-none absolute top-[26px] left-0 z-20 w-[270px] rounded-lg border border-line-strong bg-raised px-3.5 py-3 text-[12.5px] leading-relaxed text-muted opacity-0 shadow-[0_8px_20px_rgba(0,0,0,0.5)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        className="pointer-events-none fixed top-14 left-5 z-20 w-[min(270px,calc(100vw-40px))] sm:absolute sm:top-[26px] sm:left-0 rounded-lg border border-line-strong bg-raised px-3.5 py-3 text-[12.5px] leading-relaxed text-muted opacity-0 shadow-[0_8px_20px_rgba(0,0,0,0.5)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
       >
         Linear tickets come from a shared demo board. Changes reach Linear only after you apply a
         reviewed proposal. Your stand-up and preferences stay scoped to this browser for 30 days.
@@ -66,13 +66,19 @@ function DemoInfo() {
   )
 }
 
-export function Workspace({ children, rail }: { children: ReactNode; rail: ReactNode }) {
+export function Workspace({ children, actions, rail }: { children: ReactNode; actions: ReactNode; rail: ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col lg:flex-row">
-      <main className="flex min-w-0 flex-1 flex-col px-5 py-10 sm:px-10 lg:px-16 lg:py-14">
-        <div className="flex w-full max-w-[600px] flex-1 flex-col gap-7">{children}</div>
+    <div className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <main aria-label="Chat" className="flex min-w-0 flex-col px-5 py-7 sm:px-8 lg:py-9">
+        <div className="mb-7 border-b border-line pb-4"><Eyebrow>01 / Chat</Eyebrow></div>
+        <div className="flex flex-1 flex-col gap-7">{children}</div>
       </main>
-      <aside className="w-full shrink-0 border-t border-line px-5 py-8 sm:px-10 lg:w-[380px] lg:border-t-0 lg:border-s lg:px-8 lg:py-10">
+      <aside aria-label="Actions" className="min-w-0 border-t border-line px-5 py-7 sm:px-8 lg:border-t-0 lg:border-s lg:px-6 lg:py-9">
+        <div className="mb-7 border-b border-line pb-4"><Eyebrow>02 / Actions</Eyebrow></div>
+        <div className="flex flex-col gap-6">{actions}</div>
+      </aside>
+      <aside aria-label="To-dos" className="min-w-0 border-t border-line px-5 py-7 sm:px-8 lg:border-t-0 lg:border-s lg:px-6 lg:py-9">
+        <div className="mb-7 border-b border-line pb-4"><Eyebrow>03 / To-dos</Eyebrow></div>
         {rail}
       </aside>
     </div>
