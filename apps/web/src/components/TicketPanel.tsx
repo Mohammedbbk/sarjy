@@ -42,9 +42,9 @@ export function TicketPanel() {
 
 function TicketGroups({ data }: { data: TasksResponse }) {
   const groups = [
-    { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.', quiet: true },
     { heading: 'In progress', tasks: data.inProgress, empty: 'Nothing started yet.', quiet: false },
     { heading: 'Up next', tasks: data.upcoming, empty: 'Nothing waiting.', quiet: false },
+    { heading: 'Recently done', tasks: data.done, empty: 'Nothing finished yet.', quiet: true },
   ]
 
   return (
@@ -60,7 +60,7 @@ function TicketGroups({ data }: { data: TasksResponse }) {
           {group.tasks.length === 0 ? (
             <p className="px-1.5 text-[13px] text-dim">{group.empty}</p>
           ) : (
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-3">
               {group.tasks.map((task) => (
                 <TicketRow key={task.id} task={task} />
               ))}
@@ -76,18 +76,17 @@ function TicketGroups({ data }: { data: TasksResponse }) {
 function TicketRow({ task }: { task: Task }) {
   const done = task.statusType === 'completed'
   return (
-    <li className="flex items-center gap-2.5 rounded-md px-1.5 py-2">
-      <span
-        className={`size-1.5 shrink-0 rounded-full ${dotFor[task.statusType]}`}
-        aria-hidden="true"
-      />
-      <span className="min-w-[44px] shrink-0 font-mono text-xs text-dim">{task.identifier}</span>
-      <span className={`flex-1 truncate text-[13.5px] ${done ? 'text-muted line-through' : ''}`}>
-        {task.title}
-      </span>
-      <span className="min-w-[60px] shrink-0 text-right font-mono text-[11px] text-dim">
-        {task.status}
-      </span>
+    <li>
+      <a href={task.url} target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-lg border border-line bg-raised px-3 py-3 transition-colors hover:border-line-strong">
+        <div className="flex items-center gap-2">
+          <span className={`size-1.5 shrink-0 rounded-full ${dotFor[task.statusType]}`} aria-hidden="true" />
+          <span className="font-mono text-xs text-dim">{task.identifier}</span>
+          <span className="ml-auto text-right font-mono text-[11px] text-muted">{task.status}</span>
+        </div>
+        <span className={`text-sm leading-relaxed [overflow-wrap:anywhere] ${done ? 'text-muted line-through' : 'text-text'}`}>
+          {task.title}
+        </span>
+      </a>
     </li>
   )
 }

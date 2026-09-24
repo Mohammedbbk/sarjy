@@ -82,6 +82,13 @@ export class WorkflowClient {
   }
 
   async context(): Promise<StandupContext | Failure> {
+    // Serialize reads with saves so neither can replace a newer snapshot.
+    const result = this.commandQueue.then(() => this.fetchContext());
+    this.commandQueue = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  private async fetchContext(): Promise<StandupContext | Failure> {
     const response = await this.request('/api/agent', ContextResponseSchema);
     if (!response.ok) {
       return fail(response.kind, 'The stand-up context is unavailable.');
@@ -103,7 +110,7 @@ export class WorkflowClient {
 
   private async sendCommand(command: Record<string, unknown>): Promise<{ ok: true; snapshot: WorkflowSnapshot } | Failure> {
     if (!this.snapshot) {
-      const loaded = await this.context();
+      const loaded = await this.fetchContext();
       if (!loaded.ok) return loaded;
     }
 
@@ -163,7 +170,7 @@ export class WorkflowClient {
   }
 
   async propose(input: {
-    entryId: string; issueId: string; kind: 'comment' | 'status'; body?: string | undefined; targetStatus?: string | undefined;
+    entryId: string; issueId?: string; kind: 'comment' | 'status' | 'create'; title?: string; body?: string | undefined; targetStatus?: string | undefined;
   }): Promise<z.infer<typeof ProposalResponseSchema> | Failure> {
     await this.commandQueue;
     const body = JSON.stringify({ ...input, actionId: randomUUID() });

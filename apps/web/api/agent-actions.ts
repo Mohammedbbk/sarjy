@@ -8,7 +8,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!context.ok) return authError(context)
   const body = await readJsonBody(request)
   const input = body && parseProposal(body)
-  if (!input) return badRequest('Send one comment or status proposal for a saved ticket update.')
+  if (!input) return badRequest('Send one new-ticket, comment, or status proposal for a saved update.')
   const result = await proposeAction(context.visitorId, context.standupId, input)
   return result.ok ? json(200, { ok: true, action: result.action })
     : json(result.status, { ok: false, error: 'proposal_failed', message: result.message })

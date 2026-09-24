@@ -27,3 +27,12 @@ scenarios:
     agent_expectations: >
       Saves the update first, proposes exactly one comment linked to that saved ticket entry, and says the visitor must review and apply the card in the browser. It does not claim a Linear comment was posted.
     tags: { feature: approval }
+
+  - label: Honors a greeting correction and reads the current progress list
+    instructions: |
+      After Sarjy greets you, say you do not want "Assalamu Alaikum" and prefer a neutral US greeting. Later, when Sarjy starts its recap, interrupt and ask exactly what is on your saved progress list.
+    agent_expectations: >
+      Saves the explicit greeting preference, immediately uses a neutral US greeting style,
+      refreshes the current stand-up context before listing progress, and reports only active
+      saved progress entries without mixing in today's work or dropped items.
+    tags: { feature: freshness_and_preferences }

@@ -69,7 +69,15 @@ export function LiveView({ standup, snapshot, actions }: Props) {
     connection === ConnectionState.SignalReconnecting
 
   return (
-    <Workspace rail={<div className="flex flex-col gap-4">{snapshot && <WorkflowPanel snapshot={snapshot} />}{actions && <ProposalPanel actions={actions.actions} pendingId={actions.pendingId} error={actions.actionError ?? actions.loadError} onApply={actions.apply} onCheck={actions.check} />}<TicketPanel /></div>}>
+    <Workspace
+      actions={
+        <>
+          {actions && <ProposalPanel actions={actions.actions} pendingId={actions.pendingId} error={actions.actionError ?? actions.loadError} onApply={actions.apply} onCheck={actions.check} />}
+          {snapshot && <WorkflowPanel snapshot={snapshot} />}
+        </>
+      }
+      rail={<TicketPanel />}
+    >
       <AudioStatus
         agentState={agentState}
         microphoneEnabled={isMicrophoneEnabled}

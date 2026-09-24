@@ -3,7 +3,7 @@ import { LinearTargetError, linearWriteGateway, type LinearWriteGateway } from '
 import { claimAction, readAction, recordAction, saveProposal } from './linear-action-store.js'
 
 type Result = { ok: true; action: LinearAction } | { ok: false; status: number; message: string }
-type Outcome = { status: 'succeeded' | 'failed' | 'uncertain'; message: string }
+type Outcome = { status: 'succeeded' | 'failed' | 'uncertain'; message: string; receipt?: { identifier: string; url: string } }
 type LinearIssue = Awaited<ReturnType<LinearWriteGateway['issue']>>
 
 const fail = (status: number, message: string): Result => ({ ok: false, status, message })
@@ -11,9 +11,15 @@ const uuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 
 export function parseProposal(raw: Record<string, unknown>): ProposalInput | null {
-  const { actionId, entryId, issueId, kind, body, targetStatus } = raw
+  const { actionId, entryId, issueId, kind, body, targetStatus, title } = raw
   if (typeof actionId !== 'string' || !uuid(actionId)) return null
   if (typeof entryId !== 'string' || !uuid(entryId)) return null
+  if (kind === 'create') {
+    if (issueId !== undefined || targetStatus !== undefined || typeof title !== 'string' || typeof body !== 'string') return null
+    if (!title.trim() || title.trim().length > 200 || !body.trim() || body.trim().length > 500) return null
+    return { actionId, entryId, kind, title: title.trim(), body: body.trim() }
+  }
+  if (title !== undefined) return null
   if (typeof issueId !== 'string' || !uuid(issueId)) return null
 
   if (kind === 'comment' && typeof body === 'string' && targetStatus === undefined) {
@@ -48,7 +54,13 @@ export async function proposeAction(
 
   let issue: LinearIssue
   try {
-    issue = await gateway.issue(input.issueId)
+    if (input.kind === 'create') {
+      const team = await gateway.team()
+      issue = { id: input.actionId, identifier: '', title: input.title, url: '',
+        teamId: team.id, description: input.body, stateId: '', stateName: '', states: [] }
+    } else {
+      issue = await gateway.issue(input.issueId)
+    }
   } catch (error) {
     return error instanceof LinearTargetError
       ? fail(400, error.message)
@@ -67,11 +79,12 @@ export async function proposeAction(
     actionId: input.actionId,
     entryId: input.entryId,
     issueId: issue.id,
+    teamId: input.kind === 'create' ? issue.teamId : null,
     issueIdentifier: issue.identifier,
     issueTitle: issue.title,
     issueUrl: issue.url,
     kind: input.kind,
-    body: input.kind === 'comment' ? input.body! : null,
+    body: input.kind !== 'status' ? input.body : null,
     fromStateId: input.kind === 'status' ? issue.stateId : null,
     fromStateName: input.kind === 'status' ? issue.stateName : null,
     toStateId: target?.id ?? null,
@@ -93,6 +106,12 @@ async function reconcile(action: LinearAction, gateway: LinearWriteGateway): Pro
         : { status: 'uncertain', message: 'The comment could not be verified in Linear.' }
     }
     const issue = await gateway.issue(action.issueId)
+    if (action.kind === 'create') {
+      return issue.id === action.issueId && issue.teamId === action.teamId &&
+        issue.title === action.issueTitle && issue.description === action.body
+        ? { status: 'succeeded', message: 'Ticket created and verified in Linear.', receipt: { identifier: issue.identifier, url: issue.url } }
+        : { status: 'uncertain', message: 'The created ticket could not be verified. Check Linear before trying again.' }
+    }
     return issue.stateId === action.toStateId
       ? { status: 'succeeded', message: 'Ticket status verified in Linear.' }
       : { status: 'uncertain', message: 'The ticket is not in the proposed status. Check Linear before trying again.' }
@@ -102,6 +121,18 @@ async function reconcile(action: LinearAction, gateway: LinearWriteGateway): Pro
 }
 
 async function execute(action: LinearAction, gateway: LinearWriteGateway): Promise<Outcome> {
+  if (action.kind === 'create') {
+    if (!action.teamId) return { status: 'failed', message: 'The proposal has no demo team.' }
+    try {
+      if (!await gateway.createIssue(action.issueId, action.teamId, action.issueTitle, action.body!)) {
+        return { status: 'failed', message: 'Linear rejected this ticket.' }
+      }
+    } catch (error) {
+      if (error instanceof LinearTargetError) return { status: 'failed', message: error.message }
+      // The preallocated issue UUID allows read-only recovery after a lost response.
+    }
+    return reconcile(action, gateway)
+  }
   let issue: LinearIssue
   try {
     issue = await gateway.issue(action.issueId)
@@ -134,7 +165,7 @@ async function execute(action: LinearAction, gateway: LinearWriteGateway): Promi
 }
 
 async function persist(action: LinearAction, outcome: Outcome): Promise<Result> {
-  const recorded = await recordAction(action.id, outcome.status, outcome.message)
+  const recorded = await recordAction(action.id, outcome.status, outcome.message, outcome.receipt)
   return recorded.ok && recorded.data ? { ok: true, action: recorded.data } : fail(503, 'The Linear outcome could not be saved. Check Linear before trying again.')
 }
 

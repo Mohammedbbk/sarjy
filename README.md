@@ -41,7 +41,7 @@ How the state stays consistent:
 
 ## Why Linear
 
-A stand-up is about tickets, so connecting Sarjy to the real board turns "I worked on KYC" into a specific ticket instead of loose text. It also creates the most useful workflow edge case: two tickets that sound alike, which Sarjy has to clarify instead of guessing. Once the stand-up flow was reliable, I let Sarjy propose comments and status changes, but only the visitor can approve them in the browser. That way a misheard sentence can't change the board on its own.
+A stand-up is about tickets, so connecting Sarjy to the real board turns "I worked on KYC" into a specific ticket instead of loose text. It also creates the most useful workflow edge case: two tickets that sound alike, which Sarjy has to clarify instead of guessing. Once the stand-up flow was reliable, I let Sarjy propose new tickets, comments, and status changes, but only the visitor can approve them in the browser. That way a misheard sentence can't change the board on its own.
 
 > The Linear team is a shared demo board with fictional tickets. Approved changes are visible to every visitor.
 

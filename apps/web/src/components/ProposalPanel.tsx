@@ -15,22 +15,22 @@ const labels: Record<LinearAction['status'], string> = {
 }
 
 export function ProposalPanel({ actions, pendingId, error, onApply, onCheck }: Props) {
-  if (!actions.length && !error) return null
   return (
-    <section className="rounded-xl border border-line bg-raised p-5" aria-label="Linear changes to review">
-      <h2 className="text-[15px] font-semibold">Recent Linear changes</h2>
+    <section className="min-w-0" aria-label="Linear changes to review">
+      <h2 className="text-[15px] font-semibold">Linear activity</h2>
       <p className="mt-1 text-xs text-muted">This is a shared demo board. Each change needs your approval.</p>
+      {!actions.length && !error && <p className="mt-4 rounded-xl border border-dashed border-line-strong p-5 text-sm leading-relaxed text-muted">No actions yet. Proposed ticket changes and their results will appear here.</p>}
       <div className="mt-4 flex flex-col gap-3">
         {actions.map((action) => (
-          <article key={action.id} className="rounded-lg border border-line-strong p-4">
-            <div className="flex items-start justify-between gap-3">
-              <a className="text-sm font-semibold text-text underline underline-offset-2" href={action.issueUrl} target="_blank" rel="noreferrer">
+          <article key={action.id} className="rounded-xl border border-line-strong bg-raised p-4 [overflow-wrap:anywhere]">
+            <div className="flex flex-col items-start gap-2">
+              {action.issueUrl ? <a className="text-sm font-semibold text-text underline underline-offset-2" href={action.issueUrl} target="_blank" rel="noreferrer">
                 {action.issueIdentifier} · {action.issueTitle}
-              </a>
-              <span className="shrink-0 font-mono text-[11px] text-muted" role="status">{labels[action.status]}</span>
+              </a> : <span className="text-sm font-semibold text-text">New ticket · {action.issueTitle}</span>}
+              <span className="rounded border border-line-strong px-2 py-0.5 font-mono text-[11px] text-muted" role="status">{labels[action.status]}</span>
             </div>
             <p className="mt-3 text-sm text-soft">
-              {action.kind === 'comment' ? `Post comment: “${action.body}”` : `Change status: ${action.fromStateName} → ${action.toStateName}`}
+              {action.kind === 'create' ? `Create ticket: “${action.body}”` : action.kind === 'comment' ? `Post comment: “${action.body}”` : `Change status: ${action.fromStateName} → ${action.toStateName}`}
             </p>
             {action.result && <p className="mt-2 text-xs text-muted">{action.result}</p>}
             {action.status === 'proposed' && <Button className="mt-4" size="sm" variant="primary" disabled={pendingId === action.id} onClick={() => onApply(action.id)}>{pendingId === action.id ? 'Applying…' : 'Apply to Linear'}</Button>}

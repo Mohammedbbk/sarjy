@@ -6,10 +6,11 @@ export type LinearAction = {
   entryId: string
   sourceText: string
   issueId: string
+  teamId?: string | null
   issueIdentifier: string
   issueTitle: string
   issueUrl: string
-  kind: 'comment' | 'status'
+  kind: 'comment' | 'status' | 'create'
   body: string | null
   fromStateId: string | null
   fromStateName: string | null
@@ -21,11 +22,8 @@ export type LinearAction = {
   updatedAt: string
 }
 
-export type ProposalInput = {
-  actionId: string
-  entryId: string
-  issueId: string
-  kind: 'comment' | 'status'
-  body?: string
-  targetStatus?: string
-}
+export type ProposalInput = { actionId: string; entryId: string } & (
+  | { kind: 'create'; title: string; body: string; issueId?: never; targetStatus?: never }
+  | { kind: 'comment'; issueId: string; body: string; targetStatus?: never }
+  | { kind: 'status'; issueId: string; targetStatus: string; body?: never }
+)
